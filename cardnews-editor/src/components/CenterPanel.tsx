@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useEditorStore } from '../store';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
-import { FontProfile, GridPosition, WatermarkPosition } from '../types';
+import { FontProfile, GridPosition, SLIDE_SIZE_PRESETS, WatermarkPosition } from '../types';
 
 const FONT_FAMILY: Record<FontProfile, string> = {
   bold_modern: '"Noto Sans KR", sans-serif',
@@ -34,7 +34,8 @@ const WATERMARK_POS: Record<WatermarkPosition, string> = {
 };
 
 export const CenterPanel: React.FC = () => {
-  const { slides, selectedSlideId, selectSlide, updateSlideDesign } = useEditorStore();
+  const { slides, selectedSlideId, selectSlide, updateSlideDesign, slideRatio } = useEditorStore();
+  const sizePreset = SLIDE_SIZE_PRESETS[slideRatio];
   const currentIndex = slides.findIndex(s => s.slide_id === selectedSlideId);
   const slide = slides[currentIndex];
   const [textBlockSelected, setTextBlockSelected] = useState(false);
@@ -55,7 +56,7 @@ export const CenterPanel: React.FC = () => {
 
   const {
     theme, font_profile, font_sizes, text_colors, text_shadow,
-    text_block_width_pct, overlay_strength, background_color,
+    text_block_width_pct, overlay_strength, background_color, background_color_2,
     background_image, watermark, logo_image
   } = slide.design;
 
@@ -63,26 +64,31 @@ export const CenterPanel: React.FC = () => {
   const highlightAlign = slide.layout.text_align === 'center' ? 'self-center'
     : slide.layout.text_align === 'right' ? 'self-end' : 'self-start';
 
-  // html2canvas 호환: CSS filter(blur, drop-shadow) 대신 인라인 style로 안전하게 처리
+  // 동적 색상 지원: background_color(색1), background_color_2(색2) 로 각 테마 색상 커스터마이즈
   const getThemeStyle = (): React.CSSProperties => {
     if (background_image) return {};
+    const c1 = background_color;
+    const c2 = background_color_2;
     switch (theme) {
       case 'aurora':
         return {
-          background: 'radial-gradient(circle at 0% 0%, #3b82f6 0%, transparent 50%), radial-gradient(circle at 100% 100%, #a855f7 0%, transparent 50%), #0f172a'
+          background: `radial-gradient(circle at 0% 0%, ${c1 ?? '#3b82f6'} 0%, transparent 50%), radial-gradient(circle at 100% 100%, ${c2 ?? '#a855f7'} 0%, transparent 50%), #0f172a`
         };
       case 'gradient_blue':
-        return { background: 'linear-gradient(to bottom right, #1e3a8a, #3730a3, #4c1d95)' };
+        return { background: `linear-gradient(to bottom right, ${c1 ?? '#1e3a8a'}, ${c2 ?? '#4c1d95'})` };
       case 'gradient_peach':
-        return { background: 'linear-gradient(to top right, #fb7185, #d946ef, #6366f1)' };
+        return { background: `linear-gradient(to top right, ${c1 ?? '#fb7185'}, ${c2 ?? '#6366f1'})` };
       case 'dark_glass':
-        return { backgroundColor: '#000000' };
-      default:
-        return { backgroundColor: background_color ?? '#1e293b' };
+        return { backgroundColor: c1 ?? '#000000' };
+      default: // solid
+        return { backgroundColor: c1 ?? '#1e293b' };
     }
   };
 
-  const safeTextShadow = text_shadow ? '2px 2px 4px rgba(0,0,0,0.6)' : undefined;
+  // 글자 그림자: 4방향 outline + 소프트 글로우 → 어두운 배경 / 배경이미지 모두에서 선명하게 보임
+  const safeTextShadow = text_shadow
+    ? '-1px -1px 0 rgba(0,0,0,0.75), 1px -1px 0 rgba(0,0,0,0.75), -1px 1px 0 rgba(0,0,0,0.75), 1px 1px 0 rgba(0,0,0,0.75), 0 2px 8px rgba(0,0,0,0.9)'
+    : undefined;
 
   const onHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>, handle: 'left' | 'right') => {
     e.stopPropagation();
@@ -113,25 +119,28 @@ export const CenterPanel: React.FC = () => {
 
   return (
     <main className="flex-1 bg-gray-200 flex flex-col items-center justify-center p-8 relative overflow-hidden">
-      <div
-        ref={canvasRef}
-        id={`slide-canvas-${slide.slide_id}`}
-        className="relative shadow-2xl overflow-hidden shrink-0 select-none"
-        style={{
-          width: '400px',
-          height: '500px',
-          fontFamily: FONT_FAMILY[font_profile],
-          ...getThemeStyle()
-        }}
-        onClick={() => setTextBlockSelected(false)}
-      >
-        {background_image && (
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${background_image})` }}
-          />
-        )}
-        <div className="absolute inset-0 bg-black" style={{ opacity: overlay_strength }} />
+      {/* shadow-2xl을 캡처 대상 밖 wrapper에 적용 — 캡처 시 oklch 색상 충돌 방지 */}
+      <div className="shadow-2xl shrink-0">
+        <div
+          ref={canvasRef}
+          id={`slide-canvas-${slide.slide_id}`}
+          className="relative overflow-hidden select-none"
+          style={{
+            width: `${sizePreset.displayW}px`,
+            height: `${sizePreset.displayH}px`,
+            fontFamily: FONT_FAMILY[font_profile],
+            ...getThemeStyle()
+          }}
+          onClick={() => setTextBlockSelected(false)}
+        >
+          {background_image && (
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: `url(${background_image})` }}
+            />
+          )}
+          {/* bg-black 대신 명시적 rgb 값 — Tailwind v4 oklch 변수 캡처 오류 방지 */}
+          <div className="absolute inset-0" style={{ backgroundColor: 'rgb(0,0,0)', opacity: overlay_strength }} />
 
         <div className={clsx(
           'absolute inset-0 p-[8%] flex flex-col z-10',
@@ -226,9 +235,15 @@ export const CenterPanel: React.FC = () => {
             {watermark.text}
           </div>
         )}
-      </div>
+        </div>{/* ← canvas div 닫기 */}
+      </div>{/* ← shadow wrapper 닫기 */}
 
-      <div className="mt-8 flex items-center gap-6 bg-white px-4 py-2 rounded-full shadow-md text-sm font-medium text-gray-700">
+      {/* 내보내기 크기 안내 */}
+      <p className="mt-2 text-[11px] text-gray-400 font-medium tracking-wide">
+        출력 해상도: {sizePreset.exportW} × {sizePreset.exportH}px
+      </p>
+
+      <div className="mt-3 flex items-center gap-6 bg-white px-4 py-2 rounded-full shadow-md text-sm font-medium text-gray-700">
         <button onClick={goPrev} disabled={currentIndex === 0} className="p-1 hover:bg-gray-100 rounded-full disabled:opacity-30">
           <ChevronLeft size={20} />
         </button>
