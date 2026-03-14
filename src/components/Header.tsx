@@ -64,9 +64,9 @@ export const Header: React.FC = () => {
       />
     )}
 
-    <header className="h-14 border-b border-gray-200 bg-white px-4 flex items-center justify-between shrink-0 z-20">
+    <header className="h-14 border-b border-gray-200 bg-white px-3 md:px-4 flex items-center justify-between shrink-0 z-20">
       {/* 카드쑉 브랜드 */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm shrink-0">
           <Sparkles size={15} className="text-white" />
         </div>
@@ -77,8 +77,9 @@ export const Header: React.FC = () => {
           >
             카드쑉
           </span>
+          {/* 서브타이틀: 모바일에서 숨김 */}
           <span
-            className="text-gray-400 font-medium"
+            className="hidden md:inline text-gray-400 font-medium"
             style={{ fontSize: '11px', letterSpacing: '0.01em' }}
           >
             간단하게 카드뉴스 제작하기
@@ -86,22 +87,21 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 md:gap-3">
         {/* 비율 선택 */}
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+        <div className="flex items-center gap-0.5 md:gap-1 bg-gray-100 rounded-lg p-1">
           {RATIO_BUTTONS.map(({ ratio, iconW, iconH }) => (
             <button
               key={ratio}
               onClick={() => setSlideRatio(ratio)}
               title={SLIDE_SIZE_PRESETS[ratio].label}
               className={clsx(
-                'flex flex-col items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold transition-all gap-1',
+                'flex flex-col items-center justify-center px-2 md:px-2.5 py-1 rounded-md text-xs font-semibold transition-all gap-1',
                 slideRatio === ratio
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
               )}
             >
-              {/* 실제 비율을 반영한 미니 사각형 아이콘 */}
               <span
                 style={{ width: iconW, height: iconH, display: 'inline-block' }}
                 className={clsx(
@@ -119,10 +119,11 @@ export const Header: React.FC = () => {
             <button
               onClick={() => handleExport('png')}
               disabled={isExporting}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-60"
+              className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-60"
             >
-              <Download size={16} />
-              {isExporting ? '내보내는 중…' : '내보내기'}
+              <Download size={15} />
+              <span className="hidden sm:inline">{isExporting ? '내보내는 중…' : '내보내기'}</span>
+              <span className="sm:hidden">{isExporting ? '…' : '저장'}</span>
             </button>
             <button
               onClick={() => setDropdownOpen(v => !v)}
