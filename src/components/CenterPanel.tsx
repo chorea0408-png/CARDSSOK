@@ -41,7 +41,23 @@ export const CenterPanel: React.FC = () => {
   const [textBlockSelected, setTextBlockSelected] = useState(false);
   const [localWidthPct, setLocalWidthPct] = useState<number | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLElement>(null);
   const dragRef = useRef<{ handle: 'left' | 'right'; startX: number; startWidth: number; } | null>(null);
+
+  // 모바일 캔버스 자동 스케일 ─────────────────────────────────────────
+  const [canvasScale, setCanvasScale] = useState(1);
+  useEffect(() => {
+    const update = () => {
+      if (!containerRef.current) return;
+      const padding = 32; // 좌우 패딩 합계
+      const available = containerRef.current.clientWidth - padding;
+      setCanvasScale(Math.min(1, available / sizePreset.displayW));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [sizePreset.displayW]);
 
   useEffect(() => {
     setTextBlockSelected(false);
@@ -118,9 +134,25 @@ export const CenterPanel: React.FC = () => {
   };
 
   return (
-    <main className="flex-1 bg-gray-200 flex flex-col items-center justify-center p-8 relative overflow-hidden">
+    <main ref={containerRef} className="flex-1 bg-gray-200 flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden">
+      {/* 스케일 wrapper: 모바일에서 캔버스를 화면 너비에 맞게 축소 */}
+      <div
+        className="shrink-0"
+        style={{
+          width:  sizePreset.displayW * canvasScale,
+          height: sizePreset.displayH * canvasScale,
+        }}
+      >
       {/* shadow-2xl을 캡처 대상 밖 wrapper에 적용 — 캡처 시 oklch 색상 충돌 방지 */}
-      <div className="shadow-2xl shrink-0">
+      <div
+        className="shadow-2xl"
+        style={{
+          transform: `scale(${canvasScale})`,
+          transformOrigin: 'top left',
+          width:  sizePreset.displayW,
+          height: sizePreset.displayH,
+        }}
+      >
         <div
           ref={canvasRef}
           id={`slide-canvas-${slide.slide_id}`}
@@ -237,6 +269,7 @@ export const CenterPanel: React.FC = () => {
         )}
         </div>{/* ← canvas div 닫기 */}
       </div>{/* ← shadow wrapper 닫기 */}
+      </div>{/* ← scale wrapper 닫기 */}
 
       {/* 내보내기 크기 안내 */}
       <p className="mt-2 text-[11px] text-gray-400 font-medium tracking-wide">
