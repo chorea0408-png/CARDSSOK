@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import * as htmlToImage from 'html-to-image';
-import { EditorState, FontSizes, GridPosition, Slide, SlideRatio, SLIDE_SIZE_PRESETS, TextAlign, TextColors } from './types';
+import JSZip from 'jszip';
+import { EditorState, ExportQuality, FontSizes, GridPosition, Slide, SlideRatio, SLIDE_SIZE_PRESETS, TextAlign, TextColors } from './types';
 
 const triggerDownload = (url: string, filename: string) => {
   const a = document.createElement('a');
@@ -19,6 +20,17 @@ const DEFAULT_TEXT_COLORS: TextColors = {
 };
 
 const HISTORY_LIMIT = 30;
+
+// ── 화질별 pixelRatio 계산 ────────────────────────────────────────────
+const getPixelRatio = (quality: ExportQuality, ratio: SlideRatio): number => {
+  const preset = SLIDE_SIZE_PRESETS[ratio];
+  const base = preset.exportW / preset.displayW; // 2x 기준 (권장)
+  switch (quality) {
+    case '1x': return 1;
+    case '2x': return base;
+    case '3x': return base * 1.5;
+  }
+};
 
 const createDefaultSlide = (id: number, customContent?: Partial<Slide['content']>): Slide => ({
   slide_id:   id,
@@ -56,18 +68,17 @@ const positionToAlign = (pos: GridPosition): TextAlign =>
 
 // ── 고화질 Export 캡처 로직 ──────────────────────────────────────────
 // ⚠️ backgroundColor 옵션 사용 금지: html-to-image가 슬라이드 자체 배경색을 덮어씌움
-// pixelRatio는 비율별 프리셋에서 동적 계산 (exportW / displayW)
 const captureSlide = async (
   slideId: number,
   ratio: SlideRatio,
+  quality: ExportQuality,
   format: 'png' | 'jpeg' = 'png'
 ): Promise<string> => {
   await document.fonts.ready;
   const el = document.getElementById(`slide-canvas-${slideId}`);
   if (!el) throw new Error(`Canvas not found: slide-canvas-${slideId}`);
   await new Promise(resolve => setTimeout(resolve, 300));
-  const preset = SLIDE_SIZE_PRESETS[ratio];
-  const pixelRatio = preset.exportW / preset.displayW;
+  const pixelRatio = getPixelRatio(quality, ratio);
   // skipFonts: Google Fonts CORS 차단 우회 (폰트는 이미 브라우저에 렌더링됨)
   const opts = { pixelRatio, skipFonts: true, cacheBust: true };
   if (format === 'jpeg') return htmlToImage.toJpeg(el as HTMLElement, { ...opts, quality: 0.95 });
@@ -79,6 +90,7 @@ export const useEditorStore = create<EditorState>()(
     (set, get) => ({
       appMode:          'input',
       slideRatio:       '4:5',
+      exportQuality:    '2x',
       project:          { id: 'proj-1', title: '새로운 카드뉴스' },
       slides:           [createDefaultSlide(1)],
       selectedSlideId:  1,
@@ -92,10 +104,8 @@ export const useEditorStore = create<EditorState>()(
 
       _pushHistory: () => {
         const { slides, _history, _historyIndex } = get();
-        // 현재 인덱스 이후 미래 히스토리 제거 (새 액션이 발생하면 redo 불가)
         const trimmed = _history.slice(0, _historyIndex + 1);
         const next = [...trimmed, slides.map(s => ({ ...s, design: { ...s.design } }))];
-        // 최대 30스텝 유지
         const capped = next.length > HISTORY_LIMIT ? next.slice(next.length - HISTORY_LIMIT) : next;
         set({ _history: capped, _historyIndex: capped.length - 1 });
       },
@@ -115,11 +125,9 @@ export const useEditorStore = create<EditorState>()(
       },
 
       setAppMode: (mode) => set({ appMode: mode }),
-
-      // 비율 변경 시 슬라이드 레이아웃 재계산 없음 (displayW/H는 CSS 기반, 자동 적용됨)
       setSlideRatio: (ratio) => set({ slideRatio: ratio }),
+      setExportQuality: (q) => set({ exportQuality: q }),
 
-      // ── 텍스트를 카드뉴스로 쪼개주는 마법의 로직 ──
       parseAndGenerateSlides: (rawText) => {
         get()._pushHistory();
         const paragraphs = rawText.split('\n\n').filter(p => p.trim() !== '');
@@ -132,7 +140,6 @@ export const useEditorStore = create<EditorState>()(
           const headline = lines[0] || '';
           const body = lines.slice(1).join('\n') || '';
           const highlight = isFirst ? 'TITLE' : 'INSIGHT';
-          // B-05: crypto.randomUUID()로 ID 충돌 방지
           const id = parseInt(crypto.randomUUID().replace(/-/g, '').slice(0, 8), 16);
           const slide = createDefaultSlide(id, { headline, body, highlight });
           slide.slide_type = type as Slide['slide_type'];
@@ -270,15 +277,15 @@ export const useEditorStore = create<EditorState>()(
       },
 
       exportPNG: async (slideId) => {
-        const { slideRatio } = get();
+        const { slideRatio, exportQuality } = get();
         try {
-          const dataUrl = await captureSlide(slideId, slideRatio, 'png');
-          // B-06: 타임스탬프 ID 대신 슬라이드 순번 사용
+          const dataUrl = await captureSlide(slideId, slideRatio, exportQuality, 'png');
           const { slides } = get();
           const idx = slides.findIndex(s => s.slide_id === slideId);
           const num = String(idx + 1).padStart(2, '0');
           const preset = SLIDE_SIZE_PRESETS[slideRatio];
-          triggerDownload(dataUrl, `slide_${num}_${preset.exportW}x${preset.exportH}.png`);
+          const suffix = exportQuality !== '2x' ? `_${exportQuality}` : '';
+          triggerDownload(dataUrl, `slide_${num}_${preset.exportW}x${preset.exportH}${suffix}.png`);
         } catch (e) {
           console.error('PNG export failed', e);
           alert('PNG 내보내기 실패: ' + (e instanceof Error ? e.message : String(e)));
@@ -286,20 +293,19 @@ export const useEditorStore = create<EditorState>()(
       },
 
       exportAllJPG: async () => {
-        const { slides, project, slideRatio } = get();
+        const { slides, project, slideRatio, exportQuality } = get();
         const originalId = get().selectedSlideId;
         const preset = SLIDE_SIZE_PRESETS[slideRatio];
+        const suffix = exportQuality !== '2x' ? `_${exportQuality}` : '';
 
         for (let i = 0; i < slides.length; i++) {
           const slide = slides[i];
-          // CenterPanel이 한 번에 1슬라이드만 렌더링하는 구조이므로 선택 전환 필요
           set({ selectedSlideId: slide.slide_id });
           await new Promise(r => setTimeout(r, 150));
           try {
-            const dataUrl = await captureSlide(slide.slide_id, slideRatio, 'jpeg');
-            // B-06: 순번 파일명
+            const dataUrl = await captureSlide(slide.slide_id, slideRatio, exportQuality, 'jpeg');
             const num = String(i + 1).padStart(2, '0');
-            triggerDownload(dataUrl, `${project.title}_slide${num}_${preset.exportW}x${preset.exportH}.jpg`);
+            triggerDownload(dataUrl, `${project.title}_slide${num}_${preset.exportW}x${preset.exportH}${suffix}.jpg`);
             await new Promise(r => setTimeout(r, 300));
           } catch (e) {
             console.error(`JPG export failed for slide ${i + 1}`, e);
@@ -308,14 +314,46 @@ export const useEditorStore = create<EditorState>()(
 
         set({ selectedSlideId: originalId });
       },
+
+      exportAllZIP: async () => {
+        const { slides, project, slideRatio, exportQuality } = get();
+        const originalId = get().selectedSlideId;
+        const preset = SLIDE_SIZE_PRESETS[slideRatio];
+        const suffix = exportQuality !== '2x' ? `_${exportQuality}` : '';
+        const zip = new JSZip();
+        const folder = zip.folder(project.title) ?? zip;
+
+        for (let i = 0; i < slides.length; i++) {
+          const slide = slides[i];
+          set({ selectedSlideId: slide.slide_id });
+          await new Promise(r => setTimeout(r, 150));
+          try {
+            const dataUrl = await captureSlide(slide.slide_id, slideRatio, exportQuality, 'jpeg');
+            // data:image/jpeg;base64,... → base64 부분만 추출
+            const base64 = dataUrl.split(',')[1];
+            const num = String(i + 1).padStart(2, '0');
+            folder.file(`slide${num}_${preset.exportW}x${preset.exportH}${suffix}.jpg`, base64, { base64: true });
+            await new Promise(r => setTimeout(r, 200));
+          } catch (e) {
+            console.error(`ZIP capture failed for slide ${i + 1}`, e);
+          }
+        }
+
+        set({ selectedSlideId: originalId });
+
+        try {
+          const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+          triggerDownload(URL.createObjectURL(blob), `${project.title}_${preset.exportW}x${preset.exportH}${suffix}.zip`);
+        } catch (e) {
+          console.error('ZIP generation failed', e);
+          alert('ZIP 생성 실패: ' + (e instanceof Error ? e.message : String(e)));
+        }
+      },
     }),
     {
       name: 'cardssok-v1',
-      // B-02: localStorage 오류를 사용자에게 알림
-      onRehydrateStorage: () => (state, error) => {
-        if (error) {
-          console.error('카드쑉: 저장 데이터 복구 실패', error);
-        }
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.error('카드쑉: 저장 데이터 복구 실패', error);
       },
       storage: {
         getItem: (name) => {
@@ -331,7 +369,6 @@ export const useEditorStore = create<EditorState>()(
           try {
             localStorage.setItem(name, JSON.stringify(value));
           } catch (e) {
-            // B-02: QuotaExceededError 사용자 알림
             if (e instanceof DOMException && e.name === 'QuotaExceededError') {
               alert('저장 공간이 부족합니다. 배경 이미지를 제거하거나 브라우저 캐시를 정리해 주세요.');
             }
@@ -341,9 +378,9 @@ export const useEditorStore = create<EditorState>()(
         removeItem: (name) => localStorage.removeItem(name),
       },
       partialize: (state) => ({
-        project:    state.project,
-        slideRatio: state.slideRatio,
-        // 이미지 dataUrl은 용량 초과 방지를 위해 저장 제외
+        project:       state.project,
+        slideRatio:    state.slideRatio,
+        exportQuality: state.exportQuality,
         slides: state.slides.map(s => ({
           ...s,
           design: { ...s.design, background_image: undefined, logo_image: undefined },
