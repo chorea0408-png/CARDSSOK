@@ -21,10 +21,9 @@ const DEFAULT_TEXT_COLORS: TextColors = {
 
 const HISTORY_LIMIT = 30;
 
-// ── 화질별 pixelRatio 계산 ────────────────────────────────────────────
 const getPixelRatio = (quality: ExportQuality, ratio: SlideRatio): number => {
   const preset = SLIDE_SIZE_PRESETS[ratio];
-  const base = preset.exportW / preset.displayW; // 2x 기준 (권장)
+  const base = preset.exportW / preset.displayW;
   switch (quality) {
     case '1x': return 1;
     case '2x': return base;
@@ -90,7 +89,7 @@ export const useEditorStore = create<EditorState>()(
     (set, get) => ({
       appMode:          'input',
       slideRatio:       '4:5',
-      exportQuality:    '2x',
+      exportQuality:    '2x' as ExportQuality,
       project:          { id: 'proj-1', title: '새로운 카드뉴스' },
       slides:           [createDefaultSlide(1)],
       selectedSlideId:  1,
@@ -99,7 +98,7 @@ export const useEditorStore = create<EditorState>()(
       isDirty:          false,
 
       // ── Undo / Redo 상태 (persist 제외) ─────────────────────────────
-      _history:      [],
+      _history:      [] as Slide[][],
       _historyIndex: -1,
 
       _pushHistory: () => {
@@ -167,11 +166,7 @@ export const useEditorStore = create<EditorState>()(
         get()._pushHistory();
         set((state) => {
           const next = state.slides.filter(s => !state.multiSelectedIds.includes(s.slide_id));
-          return {
-            slides: next.length ? next : [createDefaultSlide(Date.now())],
-            multiSelectedIds: [],
-            isDirty: true,
-          };
+          return { slides: next.length ? next : [createDefaultSlide(Date.now())], multiSelectedIds: [], isDirty: true };
         });
       },
 
@@ -200,26 +195,18 @@ export const useEditorStore = create<EditorState>()(
           const newId = parseInt(crypto.randomUUID().replace(/-/g, '').slice(0, 8), 16);
           const copy: Slide = { ...src, slide_id: newId, _isDirty: false };
           const idx = state.slides.findIndex(s => s.slide_id === id);
-          const next = [
-            ...state.slides.slice(0, idx + 1),
-            copy,
-            ...state.slides.slice(idx + 1),
-          ];
+          const next = [...state.slides.slice(0, idx + 1), copy, ...state.slides.slice(idx + 1)];
           return { slides: next, selectedSlideId: copy.slide_id, isDirty: true };
         });
       },
 
       updateSlideContent: (id, field, value) => set((state) => ({
-        slides: state.slides.map(s =>
-          s.slide_id === id ? { ...s, content: { ...s.content, [field]: value }, _isDirty: true } : s
-        ),
+        slides: state.slides.map(s => s.slide_id === id ? { ...s, content: { ...s.content, [field]: value }, _isDirty: true } : s),
         isDirty: true,
       })),
 
       updateSlideLayout: (id, updates) => set((state) => ({
-        slides: state.slides.map(s =>
-          s.slide_id === id ? { ...s, layout: { ...s.layout, ...updates }, _isDirty: true } : s
-        ),
+        slides: state.slides.map(s => s.slide_id === id ? { ...s, layout: { ...s.layout, ...updates }, _isDirty: true } : s),
         isDirty: true,
       })),
 
@@ -243,30 +230,22 @@ export const useEditorStore = create<EditorState>()(
       })),
 
       setBackgroundImage: (id, dataUrl) => set((state) => ({
-        slides: state.slides.map(s =>
-          s.slide_id === id ? { ...s, design: { ...s.design, background_image: dataUrl }, _isDirty: true } : s
-        ),
+        slides: state.slides.map(s => s.slide_id === id ? { ...s, design: { ...s.design, background_image: dataUrl }, _isDirty: true } : s),
         isDirty: true,
       })),
 
       removeBackgroundImage: (id) => set((state) => ({
-        slides: state.slides.map(s =>
-          s.slide_id === id ? { ...s, design: { ...s.design, background_image: undefined }, _isDirty: true } : s
-        ),
+        slides: state.slides.map(s => s.slide_id === id ? { ...s, design: { ...s.design, background_image: undefined }, _isDirty: true } : s),
         isDirty: true,
       })),
 
       setLogoImage: (id, dataUrl) => set((state) => ({
-        slides: state.slides.map(s =>
-          s.slide_id === id ? { ...s, design: { ...s.design, logo_image: dataUrl }, _isDirty: true } : s
-        ),
+        slides: state.slides.map(s => s.slide_id === id ? { ...s, design: { ...s.design, logo_image: dataUrl }, _isDirty: true } : s),
         isDirty: true,
       })),
 
       removeLogoImage: (id) => set((state) => ({
-        slides: state.slides.map(s =>
-          s.slide_id === id ? { ...s, design: { ...s.design, logo_image: undefined }, _isDirty: true } : s
-        ),
+        slides: state.slides.map(s => s.slide_id === id ? { ...s, design: { ...s.design, logo_image: undefined }, _isDirty: true } : s),
         isDirty: true,
       })),
 
@@ -311,7 +290,6 @@ export const useEditorStore = create<EditorState>()(
             console.error(`JPG export failed for slide ${i + 1}`, e);
           }
         }
-
         set({ selectedSlideId: originalId });
       },
 
@@ -329,7 +307,6 @@ export const useEditorStore = create<EditorState>()(
           await new Promise(r => setTimeout(r, 150));
           try {
             const dataUrl = await captureSlide(slide.slide_id, slideRatio, exportQuality, 'jpeg');
-            // data:image/jpeg;base64,... → base64 부분만 추출
             const base64 = dataUrl.split(',')[1];
             const num = String(i + 1).padStart(2, '0');
             folder.file(`slide${num}_${preset.exportW}x${preset.exportH}${suffix}.jpg`, base64, { base64: true });
@@ -338,7 +315,6 @@ export const useEditorStore = create<EditorState>()(
             console.error(`ZIP capture failed for slide ${i + 1}`, e);
           }
         }
-
         set({ selectedSlideId: originalId });
 
         try {
@@ -377,6 +353,7 @@ export const useEditorStore = create<EditorState>()(
         },
         removeItem: (name) => localStorage.removeItem(name),
       },
+      // ✅ as unknown as EditorState: partialize 반환값 타입 캐스팅 (Zustand v5 요구사항)
       partialize: (state) => ({
         project:       state.project,
         slideRatio:    state.slideRatio,
@@ -385,7 +362,7 @@ export const useEditorStore = create<EditorState>()(
           ...s,
           design: { ...s.design, background_image: undefined, logo_image: undefined },
         })),
-      }),
+      }) as unknown as EditorState,
     }
   )
 );
