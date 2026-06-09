@@ -11,6 +11,13 @@ export const SLIDE_SIZE_PRESETS: Record<SlideRatio, {
   '4:5':  { displayW: 400, displayH: 500, exportW: 1080, exportH: 1350,  label: '피드 (4:5)' },
   '9:16': { displayW: 338, displayH: 600, exportW: 1080, exportH: 1920,  label: '스토리 (9:16)' },
 };
+
+// ── 내보내기 화질 ─────────────────────────────────────────────────────
+// 1x: 화면 해상도 (빠른 미리보기용)
+// 2x: 권장 (exportW 기준 고화질, 현재 기본값)
+// 3x: 최고화질 (exportW × 1.5배 — 대형 인쇄용)
+export type ExportQuality = '1x' | '2x' | '3x';
+
 export type GridPosition = 'TL' | 'TC' | 'TR' | 'ML' | 'MC' | 'MR' | 'BL' | 'BC' | 'BR';
 export type TextDensity  = 'LIGHT' | 'MEDIUM' | 'HEAVY';
 export type VisualPriority = 'TEXT_FIRST' | 'BALANCED' | 'VISUAL_FIRST';
@@ -92,6 +99,10 @@ export interface EditorState {
   setSlideRatio:    (ratio: SlideRatio) => void;
   parseAndGenerateSlides: (rawText: string) => void;
 
+  // ── 내보내기 화질 ──────────────────────────────────────────────────
+  exportQuality:    ExportQuality;
+  setExportQuality: (q: ExportQuality) => void;
+
   project:          ProjectMeta;
   slides:           Slide[];
   selectedSlideId:  number;
@@ -121,7 +132,8 @@ export interface EditorState {
   removeBackgroundImage: (id: number) => void;
   setLogoImage:          (id: number, dataUrl: string) => void;
   removeLogoImage:       (id: number) => void;
-  exportJSON:    () => void;
-  exportPNG:     (slideId: number) => Promise<void>;
-  exportAllJPG:  () => Promise<void>;
+  exportJSON:      () => void;
+  exportPNG:       (slideId: number) => Promise<void>;
+  exportAllJPG:    () => Promise<void>;
+  exportAllZIP:    () => Promise<void>;
 }
