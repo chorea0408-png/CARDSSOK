@@ -1,13 +1,13 @@
 import React from 'react';
 import { useEditorStore } from '../store';
-import { PlusCircle, AlertCircle, Trash2 } from 'lucide-react';
+import { PlusCircle, AlertCircle, Trash2, Copy } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export const LeftPanel: React.FC = () => {
   const {
     slides, selectedSlideId, multiSelectedIds,
     selectSlide, toggleMultiSelect, clearMultiSelect,
-    addSlide, deleteSlide, deleteSelected,
+    addSlide, deleteSlide, deleteSelected, duplicateSlide,
   } = useEditorStore();
 
   const hasMulti = multiSelectedIds.length > 0;
@@ -59,7 +59,7 @@ export const LeftPanel: React.FC = () => {
 
             return (
               <div key={slide.slide_id} className="relative group/item">
-                {/* 다중선택 체크박스 (hover 시 나타남, 또는 이미 선택된 경우) */}
+                {/* 다중선택 체크박스 */}
                 <div
                   className={clsx(
                     'absolute left-2 top-1/2 -translate-y-1/2 z-10 w-4 h-4 rounded border-2 flex items-center justify-center transition-all',
@@ -82,14 +82,13 @@ export const LeftPanel: React.FC = () => {
                 <button
                   onClick={(e) => {
                     if (e.ctrlKey || e.metaKey) {
-                      // Ctrl/Cmd+클릭: 다중선택 토글
                       toggleMultiSelect(slide.slide_id);
                     } else {
                       selectSlide(slide.slide_id);
                     }
                   }}
                   className={clsx(
-                    'w-full text-left p-3 pl-8 rounded-lg border text-sm transition-all',
+                    'w-full text-left p-3 pl-8 pr-16 rounded-lg border text-sm transition-all',
                     isMulti
                       ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-300'
                       : isSelected
@@ -108,18 +107,34 @@ export const LeftPanel: React.FC = () => {
                   </p>
                 </button>
 
-                {/* 삭제 버튼 — hover 시 표시 (다중선택 아닐 때) */}
-                {slides.length > 1 && !isMulti && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSlide(slide.slide_id);
-                    }}
-                    title="슬라이드 삭제"
-                    className="absolute top-2 right-2 opacity-0 group-hover/item:opacity-100 transition-opacity p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                {/* 액션 버튼들 — hover 시 표시 (다중선택 아닐 때) */}
+                {!isMulti && (
+                  <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                    {/* 복제 버튼 */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        duplicateSlide(slide.slide_id);
+                      }}
+                      title="슬라이드 복제"
+                      className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Copy size={12} />
+                    </button>
+                    {/* 삭제 버튼 */}
+                    {slides.length > 1 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteSlide(slide.slide_id);
+                        }}
+                        title="슬라이드 삭제"
+                        className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             );
@@ -134,7 +149,6 @@ export const LeftPanel: React.FC = () => {
           Add Slide
         </button>
 
-        {/* 다중선택 안내 */}
         <p className="mt-3 text-center text-[10px] text-gray-400">
           Ctrl+클릭으로 여러 슬라이드 선택
         </p>
