@@ -1,30 +1,33 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X, Download } from 'lucide-react';
 
 interface Props {
-  exportLabel: string;   // "PNG 내보내기" 등 버튼에 표시될 텍스트
-  onConfirm: () => void; // 닫기/다운로드 버튼 클릭 시 실행할 export 함수
-  onClose: () => void;   // 그냥 닫기 (X 버튼 or 오버레이 클릭)
+  exportLabel: string;
+  onConfirm: () => void;
+  onClose: () => void;
 }
 
 declare global { interface Window { adsbygoogle: unknown[] } }
 
 export const ExportAdModal: React.FC<Props> = ({ exportLabel, onConfirm, onClose }) => {
-  // ESC 키로도 닫기 가능
+  // B-03: useRef로 최초 1회만 광고 push 실행 (export마다 중복 초기화 방지)
+  const adPushed = useRef(false);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  // 애드센스 광고 초기화
   useEffect(() => {
+    if (adPushed.current) return;
+    adPushed.current = true;
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (_) {}
   }, []);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      {/* 반투명 오버레이 — 클릭해도 닫힘 (소프트) */}
+      {/* 반투명 오버레이 */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
 
       {/* 모달 카드 */}
