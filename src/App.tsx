@@ -14,7 +14,10 @@ declare global { interface Window { adsbygoogle: unknown[] } }
 // ── 하단 배너 광고 (데스크톱 전용) ─────────────────────────────────────
 const BottomAdBanner: React.FC = () => {
   const [dismissed, setDismissed] = useState(false);
+  const adPushed = useRef(false);
   React.useEffect(() => {
+    if (adPushed.current) return;
+    adPushed.current = true;
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (_) {}
   }, []);
   if (dismissed) return null;
@@ -113,24 +116,29 @@ const MobileTabBar: React.FC<{ active: MobileTab; onChange: (t: MobileTab) => vo
   </nav>
 );
 
-// ── 모바일 감지 훅 ─────────────────────────────────────────────────────
+// ── 모바일 감지 훅 (디바운싱 적용 — Phase 3) ──────────────────────────
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
   useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 768);
+    let timer: ReturnType<typeof setTimeout>;
+    const handler = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setIsMobile(window.innerWidth < 768), 100);
+    };
     window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
+    return () => { window.removeEventListener('resize', handler); clearTimeout(timer); };
   }, []);
   return isMobile;
 }
 
 // ── App ────────────────────────────────────────────────────────────────
 function App() {
-  const { project } = useEditorStore();
+  const { project, isDirty, undo, redo, deleteSelected } = useEditorStore();
   const [widths, setWidths] = useState(DEFAULT_WIDTHS);
-  const [activeTab, setActiveTab] = useState<MobileTab>('preview');
+  // Phase 2: 모바일 기본 탭을 'manuscript'로 변경 (첫 화면이 빈 preview 대신 원고 입력창)
+  const [activeTab, setActiveTab] = useState<MobileTab>('manuscript');
   const isMobile = useIsMobile();
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -140,6 +148,38 @@ function App() {
       [panel]: clamp(prev[panel] + delta, MIN_WIDTHS[panel], MAX_WIDTHS[panel]),
     }));
   }, []);
+
+  // ── 키보드 단축키 (Undo/Redo/Delete) ──────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      const target = e.target as HTMLElement;
+      // 텍스트 입력 중에는 단축키 비활성화
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) return;
+
+      if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo, deleteSelected]);
+
+  // ── B-01: 탭 닫을 때 작업 손실 경고 ──────────────────────────────
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      // 표준: returnValue 설정 (Chrome 등 대부분의 브라우저에서 기본 메시지 표시)
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   if (!project) return <div>Loading...</div>;
 
