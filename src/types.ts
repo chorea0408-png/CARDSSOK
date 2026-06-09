@@ -17,8 +17,8 @@ export type VisualPriority = 'TEXT_FIRST' | 'BALANCED' | 'VISUAL_FIRST';
 export type TextAlign   = 'left' | 'center' | 'right';
 export type FontProfile = 'bold_modern' | 'classic_editorial' | 'clean_sans' | 'soft_rounded';
 export type WatermarkPosition = 'TL' | 'TC' | 'TR' | 'BL' | 'BC' | 'BR';
-// 새로 추가된 테마 및 색상 타입
 export type ThemeType = 'solid' | 'gradient_blue' | 'gradient_peach' | 'aurora' | 'dark_glass';
+
 export interface TextColors {
   headline: string;
   body: string;
@@ -48,16 +48,16 @@ export interface SlideLayout {
 }
 export interface SlideDesign {
   template_id:          string;
-  theme:                ThemeType;        // 테마 추가
+  theme:                ThemeType;
   overlay_strength:     number;
-  background_color?:    string;   // 배경 기본색 (solid 단색 or 그라디언트 색1)
-  background_color_2?:  string;   // 배경 보조색 (그라디언트 색2)
+  background_color?:    string;
+  background_color_2?:  string;
   background_image?:    string;
-  logo_image?:          string;           // 브랜드 로고 추가
+  logo_image?:          string;
   font_profile:         FontProfile;
   font_sizes:           FontSizes;
-  text_colors:          TextColors;       // 개별 텍스트 색상 추가
-  text_shadow:          boolean;          // 글자 가독성 그림자 추가
+  text_colors:          TextColors;
+  text_shadow:          boolean;
   text_block_width_pct: number;
   watermark?:           WatermarkConfig;
 }
@@ -90,7 +90,7 @@ export interface EditorState {
   setAppMode:       (mode: 'input' | 'editor') => void;
   slideRatio:       SlideRatio;
   setSlideRatio:    (ratio: SlideRatio) => void;
-  parseAndGenerateSlides: (rawText: string) => void; // 원고 자동 분할
+  parseAndGenerateSlides: (rawText: string) => void;
 
   project:          ProjectMeta;
   slides:           Slide[];
@@ -98,12 +98,21 @@ export interface EditorState {
   multiSelectedIds: number[];
   editingField:     string | null;
   isDirty:          boolean;
+
+  // ── Undo / Redo ──────────────────────────────────────────────────────
+  _history:      Slide[][];
+  _historyIndex: number;
+  _pushHistory:  () => void;
+  undo:          () => void;
+  redo:          () => void;
+
   selectSlide:           (id: number) => void;
   toggleMultiSelect:     (id: number) => void;
   clearMultiSelect:      () => void;
   deleteSelected:        () => void;
   addSlide:              () => void;
   deleteSlide:           (id: number) => void;
+  duplicateSlide:        (id: number) => void;
   updateSlideContent:    (id: number, field: keyof SlideContent, value: string) => void;
   updateSlideLayout:     (id: number, updates: Partial<SlideLayout>) => void;
   updateSlideGridPosition: (id: number, position: GridPosition) => void;
