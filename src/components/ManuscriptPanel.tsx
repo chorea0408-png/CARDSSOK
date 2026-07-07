@@ -67,7 +67,7 @@ const CARDNEWS_PROMPT = `당신은 SNS 카드뉴스 콘텐츠 편집자입니다
 // 프롬프트 요약 (박스에 보여줄 압축 버전)
 const PROMPT_SUMMARY = '긴 원고 → 카드뉴스 슬라이드 자동 분할 · 핵심 메시지 추출 · 모바일 가독성 최적화 · 최대 10슬라이드';
 
-export const ManuscriptPanel: React.FC = () => {
+const ManuscriptPanelImpl: React.FC = () => {
   const { parseAndGenerateSlides } = useEditorStore();
   const [text, setText] = useState('');
   const [copied, setCopied] = useState(false);
@@ -190,3 +190,6 @@ export const ManuscriptPanel: React.FC = () => {
     </aside>
   );
 };
+
+// 패널 리사이즈 드래그 중 부모(App)가 재렌더링되어도 불필요하게 다시 그려지지 않도록 memo 처리
+export const ManuscriptPanel = React.memo(ManuscriptPanelImpl);

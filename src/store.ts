@@ -65,6 +65,31 @@ const createDefaultSlide = (id: number, customContent?: Partial<Slide['content']
 const positionToAlign = (pos: GridPosition): TextAlign =>
   pos.endsWith('L') ? 'left' : pos.endsWith('R') ? 'right' : 'center';
 
+// ── 렌더링 안정화 대기 ─────────────────────────────────────────────────
+// 슬라이드 전환/스타일 변경 후 DOM이 잠잠해질 때까지 기다림.
+// 고정 딜레이(300ms) 대신 실제 변경이 멎는 시점에 맞춰 대기 시간을 줄인다.
+const waitForStableRender = (el: HTMLElement, quietMs = 60, maxWaitMs = 400): Promise<void> => {
+  return new Promise((resolve) => {
+    let settled = false;
+    let quietTimer: ReturnType<typeof setTimeout>;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      observer.disconnect();
+      clearTimeout(quietTimer);
+      clearTimeout(hardTimer);
+      resolve();
+    };
+    const observer = new MutationObserver(() => {
+      clearTimeout(quietTimer);
+      quietTimer = setTimeout(finish, quietMs);
+    });
+    observer.observe(el, { childList: true, subtree: true, attributes: true, characterData: true });
+    quietTimer = setTimeout(finish, quietMs);
+    const hardTimer = setTimeout(finish, maxWaitMs);
+  });
+};
+
 // ── 고화질 Export 캡처 로직 ──────────────────────────────────────────
 // ⚠️ backgroundColor 옵션 사용 금지: html-to-image가 슬라이드 자체 배경색을 덮어씌움
 const captureSlide = async (
@@ -76,7 +101,8 @@ const captureSlide = async (
   await document.fonts.ready;
   const el = document.getElementById(`slide-canvas-${slideId}`);
   if (!el) throw new Error(`Canvas not found: slide-canvas-${slideId}`);
-  await new Promise(resolve => setTimeout(resolve, 300));
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  await waitForStableRender(el);
   const pixelRatio = getPixelRatio(quality, ratio);
   // skipFonts: Google Fonts CORS 차단 우회 (폰트는 이미 브라우저에 렌더링됨)
   const opts = { pixelRatio, skipFonts: true, cacheBust: true };
@@ -285,7 +311,7 @@ export const useEditorStore = create<EditorState>()(
         for (let i = 0; i < slides.length; i++) {
           const slide = slides[i];
           set({ selectedSlideId: slide.slide_id });
-          await new Promise(r => setTimeout(r, 150));
+          await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
           try {
             const dataUrl = await captureSlide(slide.slide_id, slideRatio, exportQuality, 'jpeg');
             const num = String(i + 1).padStart(2, '0');
@@ -309,7 +335,7 @@ export const useEditorStore = create<EditorState>()(
         for (let i = 0; i < slides.length; i++) {
           const slide = slides[i];
           set({ selectedSlideId: slide.slide_id });
-          await new Promise(r => setTimeout(r, 150));
+          await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
           try {
             const dataUrl = await captureSlide(slide.slide_id, slideRatio, exportQuality, 'jpeg');
             const base64 = dataUrl.split(',')[1];

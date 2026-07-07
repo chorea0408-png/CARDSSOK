@@ -3,7 +3,7 @@ import { useEditorStore } from '../store';
 import { PlusCircle, AlertCircle, Trash2, Copy, GripVertical } from 'lucide-react';
 import { clsx } from 'clsx';
 
-export const LeftPanel: React.FC = () => {
+const LeftPanelImpl: React.FC = () => {
   const {
     slides, selectedSlideId, multiSelectedIds,
     selectSlide, toggleMultiSelect, clearMultiSelect,
@@ -214,3 +214,6 @@ export const LeftPanel: React.FC = () => {
     </aside>
   );
 };
+
+// 패널 리사이즈 드래그 중 부모(App)가 재렌더링되어도 불필요하게 다시 그려지지 않도록 memo 처리
+export const LeftPanel = React.memo(LeftPanelImpl);

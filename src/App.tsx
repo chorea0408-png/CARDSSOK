@@ -86,6 +86,25 @@ const ResizeDivider: React.FC<ResizeDividerProps> = ({ onDragDelta }) => {
 const DEFAULT_WIDTHS = { manuscript: 280, left: 240, right: 320 };
 const MIN_WIDTHS     = { manuscript: 160, left: 160, right: 200 };
 const MAX_WIDTHS     = { manuscript: 500, left: 400, right: 500 };
+const PANEL_WIDTHS_KEY = 'cardssok-panel-widths';
+
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+// 새로고침 후에도 리사이즈한 패널 너비를 유지 (Phase 3)
+const loadStoredWidths = (): typeof DEFAULT_WIDTHS => {
+  try {
+    const raw = localStorage.getItem(PANEL_WIDTHS_KEY);
+    if (!raw) return DEFAULT_WIDTHS;
+    const parsed = JSON.parse(raw);
+    return {
+      manuscript: clamp(Number(parsed.manuscript) || DEFAULT_WIDTHS.manuscript, MIN_WIDTHS.manuscript, MAX_WIDTHS.manuscript),
+      left:       clamp(Number(parsed.left)       || DEFAULT_WIDTHS.left,       MIN_WIDTHS.left,       MAX_WIDTHS.left),
+      right:      clamp(Number(parsed.right)      || DEFAULT_WIDTHS.right,      MIN_WIDTHS.right,      MAX_WIDTHS.right),
+    };
+  } catch {
+    return DEFAULT_WIDTHS;
+  }
+};
 
 // ── 모바일 탭 ──────────────────────────────────────────────────────────
 type MobileTab = 'manuscript' | 'slides' | 'preview' | 'design';
@@ -184,18 +203,21 @@ function useIsMobile() {
 // ── App ────────────────────────────────────────────────────────────────
 function App() {
   const { project, isDirty, undo, redo, deleteSelected, appMode, setAppMode } = useEditorStore();
-  const [widths, setWidths] = useState(DEFAULT_WIDTHS);
+  const [widths, setWidths] = useState(loadStoredWidths);
   // Phase 2: 모바일 기본 탭을 'manuscript'로 변경 (첫 화면이 빈 preview 대신 원고 입력창)
   const [activeTab, setActiveTab] = useState<MobileTab>('manuscript');
   const isMobile = useIsMobile();
 
-  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
   const handleDrag = useCallback((panel: keyof typeof DEFAULT_WIDTHS, delta: number) => {
     setWidths(prev => ({
       ...prev,
       [panel]: clamp(prev[panel] + delta, MIN_WIDTHS[panel], MAX_WIDTHS[panel]),
     }));
   }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(PANEL_WIDTHS_KEY, JSON.stringify(widths)); } catch { /* 저장 실패는 무시 (기본값으로 계속 동작) */ }
+  }, [widths]);
 
   // ── 키보드 단축키 (Undo/Redo/Delete) ──────────────────────────────
   useEffect(() => {
