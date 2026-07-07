@@ -1,8 +1,8 @@
 import React, { useRef } from 'react';
 import { useEditorStore } from '../store';
-import { FontProfile, GridPosition, Slide, WatermarkPosition, ThemeType, FontSizes } from '../types';
+import { FontProfile, GridPosition, Slide, SlideDesign, WatermarkPosition, ThemeType, FontSizes } from '../types';
 import { clsx } from 'clsx';
-import { ImagePlus, X } from 'lucide-react';
+import { ImagePlus, X, Sparkles } from 'lucide-react';
 
 const GRID_POSITIONS: GridPosition[] = ['TL', 'TC', 'TR', 'ML', 'MC', 'MR', 'BL', 'BC', 'BR'];
 
@@ -27,6 +27,46 @@ const WATERMARK_POSITIONS: { pos: WatermarkPosition; icon: string; label: string
   { pos: 'BL', icon: '↙', label: '좌하' }, { pos: 'BC', icon: '↓', label: '하중' }, { pos: 'BR', icon: '↘', label: '우하' },
 ];
 
+// "템플릿 고를 필요 없이" 바로 완성된 톤을 적용할 수 있는 인기 조합 프리셋
+const DESIGN_PRESETS: { label: string; swatch: string; design: Partial<SlideDesign> }[] = [
+  {
+    label: '모던 블루', swatch: 'bg-gradient-to-tr from-blue-600 to-purple-600',
+    design: {
+      theme: 'aurora', font_profile: 'bold_modern',
+      background_color: '#3b82f6', background_color_2: '#a855f7',
+      text_colors: { headline: '#ffffff', body: '#e2e8f0', highlight_text: '#111827', highlight_bg: '#ffffff' },
+      text_shadow: true,
+    },
+  },
+  {
+    label: '다크 시크', swatch: 'bg-black',
+    design: {
+      theme: 'dark_glass', font_profile: 'clean_sans',
+      background_color: '#000000', background_color_2: undefined,
+      text_colors: { headline: '#ffffff', body: '#cbd5e1', highlight_text: '#000000', highlight_bg: '#ffffff' },
+      text_shadow: true,
+    },
+  },
+  {
+    label: '피치 감성', swatch: 'bg-gradient-to-tr from-rose-400 to-indigo-400',
+    design: {
+      theme: 'gradient_peach', font_profile: 'soft_rounded',
+      background_color: '#fb7185', background_color_2: '#6366f1',
+      text_colors: { headline: '#ffffff', body: '#fce7f3', highlight_text: '#831843', highlight_bg: '#ffffff' },
+      text_shadow: true,
+    },
+  },
+  {
+    label: '미니멀 화이트', swatch: 'bg-gray-100 border border-gray-300',
+    design: {
+      theme: 'solid', font_profile: 'classic_editorial',
+      background_color: '#f8fafc', background_color_2: undefined,
+      text_colors: { headline: '#0f172a', body: '#334155', highlight_text: '#ffffff', highlight_bg: '#2563eb' },
+      text_shadow: false,
+    },
+  },
+];
+
 const Divider: React.FC<{ label: string }> = ({ label }) => (
   <h3 className="text-sm font-semibold text-gray-900 mb-3 border-b pb-2 mt-6">{label}</h3>
 );
@@ -34,7 +74,7 @@ const Divider: React.FC<{ label: string }> = ({ label }) => (
 const RightPanelImpl: React.FC = () => {
   const {
     slides, selectedSlideId,
-    updateSlideContent, updateSlideLayout, updateSlideGridPosition, updateSlideDesign,
+    updateSlideContent, updateSlideLayout, updateSlideGridPosition, updateSlideDesign, applyDesignPreset,
     setBackgroundImage, removeBackgroundImage, setLogoImage, removeLogoImage
   } = useEditorStore();
 
@@ -80,6 +120,27 @@ const RightPanelImpl: React.FC = () => {
   return (
     <aside className="w-full h-full border-l border-gray-200 bg-white flex flex-col overflow-y-auto">
       <div className="p-5 space-y-2">
+        {/* ── 인기 조합 원클릭 프리셋 ── */}
+        <div className="mb-1">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Sparkles size={13} className="text-blue-500" />
+            <h3 className="text-sm font-semibold text-gray-900">빠른 스타일 적용</h3>
+          </div>
+          <p className="text-[11px] text-gray-400 mb-2">전체 슬라이드에 한 번에 적용돼요 · 되돌리기 가능</p>
+          <div className="grid grid-cols-2 gap-2">
+            {DESIGN_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                onClick={() => applyDesignPreset(preset.design)}
+                className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left"
+              >
+                <span className={clsx('w-6 h-6 rounded-full shrink-0', preset.swatch)} />
+                <span className="text-xs font-medium text-gray-700">{preset.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <Divider label="콘텐츠 & 텍스트 설정" />
 
         <div className="space-y-3">

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useEditorStore } from '../store';
+import { useToast } from './Toast';
 import { Sparkles, ArrowRight, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 
 // ── 카드뉴스 변환 프롬프트 전문 ────────────────────────────────────────
@@ -68,10 +69,30 @@ const CARDNEWS_PROMPT = `당신은 SNS 카드뉴스 콘텐츠 편집자입니다
 const PROMPT_SUMMARY = '긴 원고 → 카드뉴스 슬라이드 자동 분할 · 핵심 메시지 추출 · 모바일 가독성 최적화 · 최대 10슬라이드';
 
 const ManuscriptPanelImpl: React.FC = () => {
-  const { parseAndGenerateSlides } = useEditorStore();
+  const { parseAndGenerateSlides, undo } = useEditorStore();
+  const { showToast } = useToast();
   const [text, setText] = useState('');
   const [copied, setCopied] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
+
+  // "가장 빠른 초안" 클레임을 실제 숫자로 보여주기 위한 경과시간 측정.
+  // 패널을 연 시점부터 첫 생성까지만 측정 — 이후 재생성은 시간 표시 없이 조용히 처리.
+  const mountTimeRef = useRef(Date.now());
+  const hasMeasuredRef = useRef(false);
+
+  const finalizeGeneration = (rawText: string): string => {
+    const matchedThemeLabel = parseAndGenerateSlides(rawText);
+    let message: string;
+    if (!hasMeasuredRef.current) {
+      const elapsed = ((Date.now() - mountTimeRef.current) / 1000).toFixed(1);
+      message = `⚡ ${elapsed}초 만에 완성!`;
+      hasMeasuredRef.current = true;
+    } else {
+      message = '✅ 슬라이드를 새로 만들었어요';
+    }
+    if (matchedThemeLabel) message += ` · ${matchedThemeLabel} 테마 자동 적용`;
+    return message;
+  };
 
   const handleGenerate = () => {
     if (!text.trim()) {
@@ -79,8 +100,19 @@ const ManuscriptPanelImpl: React.FC = () => {
       return;
     }
     if (window.confirm('원고를 바탕으로 카드뉴스를 새로 구성합니다. 기존 디자인은 초기화됩니다. 계속하시겠습니까?')) {
-      parseAndGenerateSlides(text);
+      const message = finalizeGeneration(text);
+      showToast('success', message);
     }
+  };
+
+  // 붙여넣기는 확인창 없이 즉시 반영 — 대신 토스트의 "되돌리기"로 안전하게 취소 가능
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData('text');
+    if (!pasted.trim()) return;
+    e.preventDefault();
+    setText(pasted);
+    const message = finalizeGeneration(pasted);
+    showToast('success', message, 4000, { label: '되돌리기', onClick: () => undo() });
   };
 
   const handleCopyPrompt = async () => {
@@ -174,6 +206,7 @@ const ManuscriptPanelImpl: React.FC = () => {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onPaste={handlePaste}
           placeholder={`요즘 뜨는 트렌드\n2024년 꼭 알아야 할 마케팅\n\n첫 번째 특징\n숏폼 콘텐츠의 기하급수적 성장\n\n전체 리포트 받기\n프로필 링크를 클릭하세요.`}
           className="w-full flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm resize-none"
           style={{ minHeight: '260px' }}

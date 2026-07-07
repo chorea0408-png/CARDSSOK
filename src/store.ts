@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import * as htmlToImage from 'html-to-image';
 import JSZip from 'jszip';
-import { EditorState, ExportQuality, FontSizes, GridPosition, Slide, SlideRatio, SLIDE_SIZE_PRESETS, TextAlign, TextColors } from './types';
+import { EditorState, ExportQuality, FontProfile, FontSizes, GridPosition, Slide, SlideConstraints, SlideRatio, SLIDE_SIZE_PRESETS, TextAlign, TextColors, ThemeType } from './types';
 
 const triggerDownload = (url: string, filename: string) => {
   const a = document.createElement('a');
@@ -65,6 +65,52 @@ const createDefaultSlide = (id: number, customContent?: Partial<Slide['content']
 const positionToAlign = (pos: GridPosition): TextAlign =>
   pos.endsWith('L') ? 'left' : pos.endsWith('R') ? 'right' : 'center';
 
+// ── 원고 키워드 기반 자동 테마 추천 ─────────────────────────────────────
+// "템플릿 고를 필요 없이 원고만 있으면 완성"을 뒷받침하는 규칙 기반(AI 미사용) 매칭.
+// 키워드 등장 횟수가 가장 많은 카테고리를 선택하고, 매칭이 하나도 없으면 기존 기본값을 유지한다.
+interface ThemeRule {
+  label: string; keywords: string[];
+  theme: ThemeType; font_profile: FontProfile;
+  c1: string; c2?: string;
+}
+const THEME_KEYWORD_RULES: ThemeRule[] = [
+  { label: '프로모션', keywords: ['할인', '세일', '이벤트', '특가', '오늘만', '한정', '무료', '증정', '쿠폰', '혜택'],
+    theme: 'gradient_peach', font_profile: 'bold_modern', c1: '#fb7185', c2: '#6366f1' },
+  { label: '에세이',   keywords: ['마음', '일상', '생각', '위로', '감성', '하루', '에세이', '여행'],
+    theme: 'solid', font_profile: 'classic_editorial', c1: '#1e293b' },
+  { label: '데이터',   keywords: ['데이터', '통계', '리포트', '분석', '전략', '성장', '매출', '트렌드', '인사이트'],
+    theme: 'gradient_blue', font_profile: 'clean_sans', c1: '#1e3a8a', c2: '#4c1d95' },
+];
+
+const pickThemeFromText = (rawText: string): ThemeRule | null => {
+  let best: ThemeRule | null = null;
+  let bestCount = 0;
+  for (const rule of THEME_KEYWORD_RULES) {
+    const count = rule.keywords.reduce((sum, kw) => sum + (rawText.split(kw).length - 1), 0);
+    if (count > bestCount) { best = rule; bestCount = count; }
+  }
+  return best;
+};
+
+// ── 텍스트 길이 기반 폰트 크기 자동 보정 ────────────────────────────────
+// 슬라이드 생성 시점에만 적용 — 이후 RightPanel에서 수동 조정한 값은 덮어쓰지 않는다.
+const BODY_CHARS_PER_LINE = 22;
+const computeAutoFontSizes = (headline: string, body: string, constraints: SlideConstraints): FontSizes => {
+  const headlineLen = headline.replace(/\n/g, '').length;
+  const headlineRatio = headlineLen / constraints.max_headline_length;
+  const headline_size = headlineRatio > 1
+    ? Math.max(16, Math.round(DEFAULT_FONT_SIZES.headline / headlineRatio))
+    : DEFAULT_FONT_SIZES.headline;
+
+  const estimatedLines = body.split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / BODY_CHARS_PER_LINE)), 0);
+  const bodyRatio = estimatedLines / constraints.max_body_lines;
+  const body_size = bodyRatio > 1
+    ? Math.max(10, Math.round(DEFAULT_FONT_SIZES.body / bodyRatio))
+    : DEFAULT_FONT_SIZES.body;
+
+  return { headline: headline_size, body: body_size, highlight: DEFAULT_FONT_SIZES.highlight };
+};
+
 // ── 렌더링 안정화 대기 ─────────────────────────────────────────────────
 // 슬라이드 전환/스타일 변경 후 DOM이 잠잠해질 때까지 기다림.
 // 고정 딜레이(300ms) 대신 실제 변경이 멎는 시점에 맞춰 대기 시간을 줄인다.
@@ -123,30 +169,47 @@ export const useEditorStore = create<EditorState>()(
       editingField:     null,
       isDirty:          false,
 
-      // ── Undo / Redo 상태 (persist 제외) ─────────────────────────────
-      _history:      [] as Slide[][],
-      _historyIndex: -1,
+      // ── Undo / Redo 스택 (persist 제외) ──────────────────────────────
+      // _history: 되돌리기용 과거 스냅샷 스택, _future: 다시실행용 스냅샷 스택
+      _history: [] as Slide[][],
+      _future:  [] as Slide[][],
 
       _pushHistory: () => {
-        const { slides, _history, _historyIndex } = get();
-        const trimmed = _history.slice(0, _historyIndex + 1);
-        const next = [...trimmed, slides.map(s => ({ ...s, design: { ...s.design } }))];
+        const { slides, _history } = get();
+        const next = [..._history, slides.map(s => ({ ...s, design: { ...s.design } }))];
         const capped = next.length > HISTORY_LIMIT ? next.slice(next.length - HISTORY_LIMIT) : next;
-        set({ _history: capped, _historyIndex: capped.length - 1 });
+        // 새 변경이 시작되면 이전에 되돌렸던 미래(redo) 갈래는 더 이상 유효하지 않음
+        set({ _history: capped, _future: [] });
       },
 
       undo: () => {
-        const { _history, _historyIndex } = get();
-        if (_historyIndex <= 0) return;
-        const prevIndex = _historyIndex - 1;
-        set({ slides: _history[prevIndex], _historyIndex: prevIndex, isDirty: true });
+        const { _history, _future, slides, selectedSlideId } = get();
+        if (_history.length === 0) return;
+        const restored = _history[_history.length - 1];
+        // parseAndGenerateSlides처럼 슬라이드 전체를 새 ID로 교체하는 액션을 되돌리면
+        // 기존 selectedSlideId가 더 이상 존재하지 않아 캔버스가 빈 화면이 됨 → 유효성 확인 후 보정
+        const stillExists = restored.some(s => s.slide_id === selectedSlideId);
+        set({
+          slides: restored,
+          _history: _history.slice(0, -1),
+          _future: [slides, ..._future],
+          selectedSlideId: stillExists ? selectedSlideId : (restored[0]?.slide_id ?? selectedSlideId),
+          isDirty: true,
+        });
       },
 
       redo: () => {
-        const { _history, _historyIndex } = get();
-        if (_historyIndex >= _history.length - 1) return;
-        const nextIndex = _historyIndex + 1;
-        set({ slides: _history[nextIndex], _historyIndex: nextIndex, isDirty: true });
+        const { _history, _future, slides, selectedSlideId } = get();
+        if (_future.length === 0) return;
+        const restored = _future[0];
+        const stillExists = restored.some(s => s.slide_id === selectedSlideId);
+        set({
+          slides: restored,
+          _history: [..._history, slides],
+          _future: _future.slice(1),
+          selectedSlideId: stillExists ? selectedSlideId : (restored[0]?.slide_id ?? selectedSlideId),
+          isDirty: true,
+        });
       },
 
       setAppMode: (mode) => set({ appMode: mode }),
@@ -156,7 +219,8 @@ export const useEditorStore = create<EditorState>()(
       parseAndGenerateSlides: (rawText) => {
         get()._pushHistory();
         const paragraphs = rawText.split('\n\n').filter(p => p.trim() !== '');
-        if (paragraphs.length === 0) return;
+        if (paragraphs.length === 0) return null;
+        const themeMatch = pickThemeFromText(rawText);
         const newSlides = paragraphs.map((para, idx) => {
           const lines = para.split('\n').filter(l => l.trim() !== '');
           const isFirst = idx === 0;
@@ -173,9 +237,17 @@ export const useEditorStore = create<EditorState>()(
           } else {
             slide.layout.grid_position = 'ML'; slide.layout.text_align = 'left';
           }
+          slide.design.font_sizes = computeAutoFontSizes(headline, body, slide.constraints);
+          if (themeMatch) {
+            slide.design.theme = themeMatch.theme;
+            slide.design.font_profile = themeMatch.font_profile;
+            slide.design.background_color = themeMatch.c1;
+            slide.design.background_color_2 = themeMatch.c2;
+          }
           return slide;
         });
         set({ slides: newSlides, selectedSlideId: newSlides[0].slide_id, appMode: 'editor', isDirty: true });
+        return themeMatch ? themeMatch.label : null;
       },
 
       selectSlide: (id) => set({ selectedSlideId: id, multiSelectedIds: [] }),
@@ -264,6 +336,14 @@ export const useEditorStore = create<EditorState>()(
         }),
         isDirty: true,
       })),
+
+      applyDesignPreset: (updates) => {
+        get()._pushHistory();
+        set((state) => ({
+          slides: state.slides.map(s => ({ ...s, design: { ...s.design, ...updates }, _isDirty: true })),
+          isDirty: true,
+        }));
+      },
 
       setBackgroundImage: (id, dataUrl) => set((state) => ({
         slides: state.slides.map(s => s.slide_id === id ? { ...s, design: { ...s.design, background_image: dataUrl }, _isDirty: true } : s),

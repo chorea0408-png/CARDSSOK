@@ -136,8 +136,11 @@ const MobileTabBar: React.FC<{ active: MobileTab; onChange: (t: MobileTab) => vo
   </nav>
 );
 
+// "예시로 체험하기" 버튼용 샘플 원고 — ManuscriptPanel 플레이스홀더와 동일한(검증된) 구조 재사용
+const SAMPLE_MANUSCRIPT = `요즘 뜨는 트렌드\n2024년 꼭 알아야 할 마케팅\n\n첫 번째 특징\n숏폼 콘텐츠의 기하급수적 성장\n\n전체 리포트 받기\n프로필 링크를 클릭하세요.`;
+
 // ── Empty State 온보딩 화면 ────────────────────────────────────────────
-const EmptyState: React.FC<{ onStart: () => void }> = ({ onStart }) => (
+const EmptyState: React.FC<{ onStart: () => void; onTryExample: () => void }> = ({ onStart, onTryExample }) => (
   <div className="flex-1 flex items-center justify-center bg-gray-50 p-6">
     <div className="max-w-sm w-full text-center">
       {/* 로고 */}
@@ -178,7 +181,13 @@ const EmptyState: React.FC<{ onStart: () => void }> = ({ onStart }) => (
         원고 입력 시작하기
         <ArrowRight size={16} />
       </button>
-      <p className="mt-3 text-[11px] text-gray-400">AI(ChatGPT/Claude)로 원고를 먼저 만들어도 좋아요</p>
+      <button
+        onClick={onTryExample}
+        className="w-full mt-2 text-sm text-blue-600 hover:text-blue-700 font-semibold py-2 rounded-xl transition-colors"
+      >
+        예시로 먼저 볼까요?
+      </button>
+      <p className="mt-1 text-[11px] text-gray-400">AI(ChatGPT/Claude)로 원고를 먼저 만들어도 좋아요</p>
     </div>
   </div>
 );
@@ -202,7 +211,10 @@ function useIsMobile() {
 
 // ── App ────────────────────────────────────────────────────────────────
 function App() {
-  const { project, isDirty, undo, redo, deleteSelected, appMode, setAppMode } = useEditorStore();
+  const {
+    project, isDirty, undo, redo, deleteSelected, appMode, setAppMode,
+    parseAndGenerateSlides, selectedSlideId, duplicateSlide, addSlide,
+  } = useEditorStore();
   const [widths, setWidths] = useState(loadStoredWidths);
   // Phase 2: 모바일 기본 탭을 'manuscript'로 변경 (첫 화면이 빈 preview 대신 원고 입력창)
   const [activeTab, setActiveTab] = useState<MobileTab>('manuscript');
@@ -234,10 +246,14 @@ function App() {
       if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
       if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
+      // ⌘D: 슬라이드 복제 (⌘D는 브라우저 북마크 단축키지만 preventDefault로 오버라이드 가능)
+      if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSlide(selectedSlideId); }
+      // N: 슬라이드 추가 — ⌘N은 브라우저가 "새 창"으로 예약해 웹에서 막을 수 없어 모디파이어 없이 바인딩
+      if (!mod && e.key.toLowerCase() === 'n') { e.preventDefault(); addSlide(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, deleteSelected]);
+  }, [undo, redo, deleteSelected, duplicateSlide, addSlide, selectedSlideId]);
 
   // ── B-01: 탭 닫을 때 작업 손실 경고 ──────────────────────────────
   useEffect(() => {
@@ -263,10 +279,17 @@ function App() {
 
         {showEmptyState ? (
           /* ── Empty State ─────────────────────────────────────────── */
-          <EmptyState onStart={() => {
-            setAppMode('editor');
-            if (isMobile) setActiveTab('manuscript');
-          }} />
+          <EmptyState
+            onStart={() => {
+              setAppMode('editor');
+              if (isMobile) setActiveTab('manuscript');
+            }}
+            onTryExample={() => {
+              parseAndGenerateSlides(SAMPLE_MANUSCRIPT);
+              setAppMode('editor');
+              if (isMobile) setActiveTab('manuscript');
+            }}
+          />
         ) : isMobile ? (
           /* ── 모바일 레이아웃 ─────────────────────────────────────── */
           <>

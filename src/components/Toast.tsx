@@ -5,15 +5,21 @@ import { clsx } from 'clsx';
 // ── 타입 ──────────────────────────────────────────────────────────────
 export type ToastType = 'loading' | 'success' | 'error';
 
+interface ToastAction {
+  label:   string;
+  onClick: () => void;
+}
+
 interface Toast {
   id:      string;
   type:    ToastType;
   message: string;
+  action?: ToastAction;
 }
 
 interface ToastContextValue {
-  showToast:   (type: ToastType, message: string, durationMs?: number) => string;
-  updateToast: (id: string, type: ToastType, message: string, durationMs?: number) => void;
+  showToast:   (type: ToastType, message: string, durationMs?: number, action?: ToastAction) => string;
+  updateToast: (id: string, type: ToastType, message: string, durationMs?: number, action?: ToastAction) => void;
   removeToast: (id: string) => void;
 }
 
@@ -45,10 +51,18 @@ const ToastItem: React.FC<{ toast: Toast; onRemove: (id: string) => void }> = ({
     >
       {icons[toast.type]}
       <span className="flex-1 leading-snug">{toast.message}</span>
+      {toast.action && (
+        <button
+          onClick={() => { toast.action!.onClick(); onRemove(toast.id); }}
+          className="shrink-0 text-blue-300 hover:text-blue-200 font-semibold underline underline-offset-2 transition-colors"
+        >
+          {toast.action.label}
+        </button>
+      )}
       {toast.type !== 'loading' && (
         <button
           onClick={() => onRemove(toast.id)}
-          className="ml-1 p-0.5 rounded-full hover:bg-white/10 transition-colors"
+          className="ml-1 p-0.5 rounded-full hover:bg-white/10 transition-colors shrink-0"
         >
           <X size={13} className="text-white/60" />
         </button>
@@ -74,15 +88,15 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     timers.current.set(id, timer);
   }, [removeToast]);
 
-  const showToast = useCallback((type: ToastType, message: string, durationMs = 3000): string => {
+  const showToast = useCallback((type: ToastType, message: string, durationMs = 3000, action?: ToastAction): string => {
     const id = crypto.randomUUID();
-    setToasts(prev => [...prev.slice(-4), { id, type, message }]); // 최대 5개
+    setToasts(prev => [...prev.slice(-4), { id, type, message, action }]); // 최대 5개
     if (type !== 'loading') scheduleRemove(id, durationMs);
     return id;
   }, [scheduleRemove]);
 
-  const updateToast = useCallback((id: string, type: ToastType, message: string, durationMs = 3000) => {
-    setToasts(prev => prev.map(t => t.id === id ? { ...t, type, message } : t));
+  const updateToast = useCallback((id: string, type: ToastType, message: string, durationMs = 3000, action?: ToastAction) => {
+    setToasts(prev => prev.map(t => t.id === id ? { ...t, type, message, action } : t));
     if (type !== 'loading') scheduleRemove(id, durationMs);
   }, [scheduleRemove]);
 

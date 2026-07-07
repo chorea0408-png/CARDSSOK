@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useEditorStore } from '../store';
-import { Download, Sparkles, ChevronDown, FileJson, Image, FileImage, FolderArchive } from 'lucide-react';
+import { Download, Sparkles, ChevronDown, FileJson, Image, FileImage, FolderArchive, Keyboard } from 'lucide-react';
 import { ExportQuality, SlideRatio, SLIDE_SIZE_PRESETS } from '../types';
 import { clsx } from 'clsx';
 import { ExportAdModal } from './ExportAdModal';
+import { ShortcutsModal } from './ShortcutsModal';
 import { useToast } from './Toast';
 
 const RATIO_BUTTONS: { ratio: SlideRatio; iconW: number; iconH: number }[] = [
@@ -30,6 +31,7 @@ export const Header: React.FC = () => {
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [adModal, setAdModal] = useState<{
@@ -105,6 +107,8 @@ export const Header: React.FC = () => {
         />
       )}
 
+      {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
+
       <header className="h-14 border-b border-gray-200 bg-white px-3 md:px-4 flex items-center justify-between shrink-0 z-20">
         {/* 브랜드 */}
         <div className="flex items-center gap-2">
@@ -166,6 +170,15 @@ export const Header: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {/* 단축키 치트시트 (데스크톱 전용) */}
+          <button
+            onClick={() => setShortcutsOpen(true)}
+            title="키보드 단축키"
+            className="hidden md:flex items-center justify-center p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            <Keyboard size={16} />
+          </button>
 
           {/* 내보내기 버튼 + 드롭다운 */}
           <div className="relative" ref={dropdownRef}>

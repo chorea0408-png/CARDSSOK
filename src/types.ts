@@ -97,7 +97,7 @@ export interface EditorState {
   setAppMode:       (mode: 'input' | 'editor') => void;
   slideRatio:       SlideRatio;
   setSlideRatio:    (ratio: SlideRatio) => void;
-  parseAndGenerateSlides: (rawText: string) => void;
+  parseAndGenerateSlides: (rawText: string) => string | null;
 
   // ── 내보내기 화질 ──────────────────────────────────────────────────
   exportQuality:    ExportQuality;
@@ -110,12 +110,12 @@ export interface EditorState {
   editingField:     string | null;
   isDirty:          boolean;
 
-  // ── Undo / Redo ──────────────────────────────────────────────────────
-  _history:      Slide[][];
-  _historyIndex: number;
-  _pushHistory:  () => void;
-  undo:          () => void;
-  redo:          () => void;
+  // ── Undo / Redo (undo/redo 스택 방식) ──────────────────────────────────
+  _history:     Slide[][];
+  _future:      Slide[][];
+  _pushHistory: () => void;
+  undo:         () => void;
+  redo:         () => void;
 
   selectSlide:           (id: number) => void;
   toggleMultiSelect:     (id: number) => void;
@@ -129,6 +129,7 @@ export interface EditorState {
   updateSlideLayout:     (id: number, updates: Partial<SlideLayout>) => void;
   updateSlideGridPosition: (id: number, position: GridPosition) => void;
   updateSlideDesign:     (id: number, updates: Partial<SlideDesign>) => void;
+  applyDesignPreset:     (updates: Partial<SlideDesign>) => void;
   setBackgroundImage:    (id: number, dataUrl: string) => void;
   removeBackgroundImage: (id: number) => void;
   setLogoImage:          (id: number, dataUrl: string) => void;
