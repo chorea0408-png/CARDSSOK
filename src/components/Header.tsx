@@ -4,6 +4,7 @@ import { Download, Sparkles, ChevronDown, FileJson, Image, FileImage, FolderArch
 import { ExportQuality, SlideRatio, SLIDE_SIZE_PRESETS } from '../types';
 import { clsx } from 'clsx';
 import { ExportAdModal } from './ExportAdModal';
+import { useToast } from './Toast';
 
 const RATIO_BUTTONS: { ratio: SlideRatio; iconW: number; iconH: number }[] = [
   { ratio: '1:1',  iconW: 13, iconH: 13 },
@@ -23,11 +24,12 @@ export const Header: React.FC = () => {
     exportJSON, exportPNG, exportAllJPG, exportAllZIP,
     slideRatio, setSlideRatio,
     exportQuality, setExportQuality,
+    slides,
   } = useEditorStore();
+  const { showToast, updateToast } = useToast();
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [adModal, setAdModal] = useState<{
@@ -47,17 +49,36 @@ export const Header: React.FC = () => {
   }, []);
 
   const runExport = async (type: 'json' | 'png' | 'jpg' | 'zip') => {
-    if (type === 'json') { exportJSON(); return; }
+    if (type === 'json') {
+      exportJSON();
+      showToast('success', 'JSON 저장 완료!');
+      return;
+    }
+
     setIsExporting(true);
-    const labels: Record<string, string> = { png: 'PNG 저장 중…', jpg: 'JPG 저장 중…', zip: 'ZIP 만드는 중…' };
-    setExportProgress(labels[type]);
+    const count = slides.length;
+    const loadingMessages: Record<string, string> = {
+      png: '현재 슬라이드 캡처 중…',
+      jpg: `슬라이드 ${count}장 변환 중…`,
+      zip: `슬라이드 ${count}장 ZIP 압축 중…`,
+    };
+    const toastId = showToast('loading', loadingMessages[type]);
+
     try {
-      if (type === 'png') await exportPNG(selectedSlideId);
-      if (type === 'jpg') await exportAllJPG();
-      if (type === 'zip') await exportAllZIP();
+      if (type === 'png') {
+        await exportPNG(selectedSlideId);
+        updateToast(toastId, 'success', 'PNG 저장 완료! ✓');
+      } else if (type === 'jpg') {
+        await exportAllJPG();
+        updateToast(toastId, 'success', `JPG ${count}장 저장 완료! ✓`);
+      } else if (type === 'zip') {
+        await exportAllZIP();
+        updateToast(toastId, 'success', `ZIP 파일 저장 완료! ✓`);
+      }
+    } catch (e) {
+      updateToast(toastId, 'error', '내보내기 실패. 다시 시도해 주세요.');
     } finally {
       setIsExporting(false);
-      setExportProgress('');
     }
   };
 
@@ -156,7 +177,7 @@ export const Header: React.FC = () => {
               >
                 <Download size={15} />
                 <span className="hidden sm:inline">
-                  {isExporting ? exportProgress : '내보내기'}
+                  {isExporting ? '내보내는 중…' : '내보내기'}
                 </span>
                 <span className="sm:hidden">{isExporting ? '…' : '저장'}</span>
               </button>

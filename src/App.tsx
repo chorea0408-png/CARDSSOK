@@ -4,8 +4,9 @@ import { ManuscriptPanel } from './components/ManuscriptPanel';
 import { LeftPanel } from './components/LeftPanel';
 import { CenterPanel } from './components/CenterPanel';
 import { RightPanel } from './components/RightPanel';
+import { ToastProvider } from './components/Toast';
 import { useEditorStore } from './store';
-import { FileText, LayoutGrid, Eye, Palette } from 'lucide-react';
+import { FileText, LayoutGrid, Eye, Palette, Sparkles, ArrowRight } from 'lucide-react';
 import { clsx } from 'clsx';
 
 // ── AdSense 타입 ────────────────────────────────────────────────────────
@@ -116,6 +117,53 @@ const MobileTabBar: React.FC<{ active: MobileTab; onChange: (t: MobileTab) => vo
   </nav>
 );
 
+// ── Empty State 온보딩 화면 ────────────────────────────────────────────
+const EmptyState: React.FC<{ onStart: () => void }> = ({ onStart }) => (
+  <div className="flex-1 flex items-center justify-center bg-gray-50 p-6">
+    <div className="max-w-sm w-full text-center">
+      {/* 로고 */}
+      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg mx-auto mb-5">
+        <Sparkles size={28} className="text-white" />
+      </div>
+      <h1 className="text-2xl font-extrabold text-gray-900 mb-2" style={{ letterSpacing: '-0.03em' }}>
+        카드쑉에 오신 걸 환영해요!
+      </h1>
+      <p className="text-sm text-gray-500 mb-8 leading-relaxed">
+        원고 텍스트를 입력하면<br />
+        카드뉴스 슬라이드가 자동으로 만들어져요.
+      </p>
+
+      {/* 사용법 3단계 */}
+      <div className="space-y-3 mb-8 text-left">
+        {[
+          { step: '1', title: '원고 입력', desc: '왼쪽 원고 창에 텍스트를 붙여넣거나 직접 입력하세요.' },
+          { step: '2', title: '자동 분리', desc: '엔터 두 번으로 슬라이드가 나뉘어요. 첫 줄은 제목, 나머지는 본문.' },
+          { step: '3', title: '디자인 & 내보내기', desc: '오른쪽에서 색상·폰트를 고르고 PNG/JPG로 저장하세요.' },
+        ].map(({ step, title, desc }) => (
+          <div key={step} className="flex items-start gap-3 bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+            <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+              {step}
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-gray-800">{title}</div>
+              <div className="text-xs text-gray-500 mt-0.5 leading-relaxed">{desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={onStart}
+        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-sm text-sm"
+      >
+        원고 입력 시작하기
+        <ArrowRight size={16} />
+      </button>
+      <p className="mt-3 text-[11px] text-gray-400">AI(ChatGPT/Claude)로 원고를 먼저 만들어도 좋아요</p>
+    </div>
+  </div>
+);
+
 // ── 모바일 감지 훅 (디바운싱 적용 — Phase 3) ──────────────────────────
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() =>
@@ -135,7 +183,7 @@ function useIsMobile() {
 
 // ── App ────────────────────────────────────────────────────────────────
 function App() {
-  const { project, isDirty, undo, redo, deleteSelected } = useEditorStore();
+  const { project, isDirty, undo, redo, deleteSelected, appMode, setAppMode } = useEditorStore();
   const [widths, setWidths] = useState(DEFAULT_WIDTHS);
   // Phase 2: 모바일 기본 탭을 'manuscript'로 변경 (첫 화면이 빈 preview 대신 원고 입력창)
   const [activeTab, setActiveTab] = useState<MobileTab>('manuscript');
@@ -183,43 +231,54 @@ function App() {
 
   if (!project) return <div>Loading...</div>;
 
-  return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-gray-100 text-gray-900 font-sans">
-      <Header />
+  // ── Empty State: 처음 진입 시 (appMode === 'input') ────────────────
+  const showEmptyState = appMode === 'input';
 
-      {/* ── 모바일 레이아웃 ─────────────────────────────────────── */}
-      {isMobile ? (
-        <>
-          <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
-            {activeTab === 'manuscript' && <ManuscriptPanel />}
-            {activeTab === 'slides'    && <LeftPanel />}
-            {activeTab === 'preview'   && <CenterPanel />}
-            {activeTab === 'design'    && <RightPanel />}
-          </div>
-          <MobileTabBar active={activeTab} onChange={setActiveTab} />
-        </>
-      ) : (
-        /* ── 데스크톱 레이아웃 ───────────────────────────────────── */
-        <>
-          <div className="flex-1 flex overflow-hidden min-h-0">
-            <div style={{ width: widths.manuscript, flexShrink: 0 }} className="flex flex-col overflow-hidden">
-              <ManuscriptPanel />
+  return (
+    <ToastProvider>
+      <div className="h-screen w-screen flex flex-col overflow-hidden bg-gray-100 text-gray-900 font-sans">
+        <Header />
+
+        {showEmptyState ? (
+          /* ── Empty State ─────────────────────────────────────────── */
+          <EmptyState onStart={() => {
+            setAppMode('editor');
+            if (isMobile) setActiveTab('manuscript');
+          }} />
+        ) : isMobile ? (
+          /* ── 모바일 레이아웃 ─────────────────────────────────────── */
+          <>
+            <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
+              {activeTab === 'manuscript' && <ManuscriptPanel />}
+              {activeTab === 'slides'    && <LeftPanel />}
+              {activeTab === 'preview'   && <CenterPanel />}
+              {activeTab === 'design'    && <RightPanel />}
             </div>
-            <ResizeDivider onDragDelta={(d) => handleDrag('manuscript', d)} />
-            <div style={{ width: widths.left, flexShrink: 0 }} className="flex flex-col overflow-hidden">
-              <LeftPanel />
+            <MobileTabBar active={activeTab} onChange={setActiveTab} />
+          </>
+        ) : (
+          /* ── 데스크톱 레이아웃 ───────────────────────────────────── */
+          <>
+            <div className="flex-1 flex overflow-hidden min-h-0">
+              <div style={{ width: widths.manuscript, flexShrink: 0 }} className="flex flex-col overflow-hidden">
+                <ManuscriptPanel />
+              </div>
+              <ResizeDivider onDragDelta={(d) => handleDrag('manuscript', d)} />
+              <div style={{ width: widths.left, flexShrink: 0 }} className="flex flex-col overflow-hidden">
+                <LeftPanel />
+              </div>
+              <ResizeDivider onDragDelta={(d) => handleDrag('left', d)} />
+              <CenterPanel />
+              <ResizeDivider onDragDelta={(d) => handleDrag('right', -d)} />
+              <div style={{ width: widths.right, flexShrink: 0 }} className="flex flex-col overflow-hidden">
+                <RightPanel />
+              </div>
             </div>
-            <ResizeDivider onDragDelta={(d) => handleDrag('left', d)} />
-            <CenterPanel />
-            <ResizeDivider onDragDelta={(d) => handleDrag('right', -d)} />
-            <div style={{ width: widths.right, flexShrink: 0 }} className="flex flex-col overflow-hidden">
-              <RightPanel />
-            </div>
-          </div>
-          <BottomAdBanner />
-        </>
-      )}
-    </div>
+            <BottomAdBanner />
+          </>
+        )}
+      </div>
+    </ToastProvider>
   );
 }
 

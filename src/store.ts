@@ -200,6 +200,16 @@ export const useEditorStore = create<EditorState>()(
         });
       },
 
+      reorderSlides: (fromIndex, toIndex) => {
+        get()._pushHistory();
+        set((state) => {
+          const next = [...state.slides];
+          const [moved] = next.splice(fromIndex, 1);
+          next.splice(toIndex, 0, moved);
+          return { slides: next, isDirty: true };
+        });
+      },
+
       updateSlideContent: (id, field, value) => set((state) => ({
         slides: state.slides.map(s => s.slide_id === id ? { ...s, content: { ...s.content, [field]: value }, _isDirty: true } : s),
         isDirty: true,
@@ -257,18 +267,13 @@ export const useEditorStore = create<EditorState>()(
 
       exportPNG: async (slideId) => {
         const { slideRatio, exportQuality } = get();
-        try {
-          const dataUrl = await captureSlide(slideId, slideRatio, exportQuality, 'png');
-          const { slides } = get();
-          const idx = slides.findIndex(s => s.slide_id === slideId);
-          const num = String(idx + 1).padStart(2, '0');
-          const preset = SLIDE_SIZE_PRESETS[slideRatio];
-          const suffix = exportQuality !== '2x' ? `_${exportQuality}` : '';
-          triggerDownload(dataUrl, `slide_${num}_${preset.exportW}x${preset.exportH}${suffix}.png`);
-        } catch (e) {
-          console.error('PNG export failed', e);
-          alert('PNG 내보내기 실패: ' + (e instanceof Error ? e.message : String(e)));
-        }
+        const dataUrl = await captureSlide(slideId, slideRatio, exportQuality, 'png');
+        const { slides } = get();
+        const idx = slides.findIndex(s => s.slide_id === slideId);
+        const num = String(idx + 1).padStart(2, '0');
+        const preset = SLIDE_SIZE_PRESETS[slideRatio];
+        const suffix = exportQuality !== '2x' ? `_${exportQuality}` : '';
+        triggerDownload(dataUrl, `slide_${num}_${preset.exportW}x${preset.exportH}${suffix}.png`);
       },
 
       exportAllJPG: async () => {
@@ -317,13 +322,8 @@ export const useEditorStore = create<EditorState>()(
         }
         set({ selectedSlideId: originalId });
 
-        try {
-          const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-          triggerDownload(URL.createObjectURL(blob), `${project.title}_${preset.exportW}x${preset.exportH}${suffix}.zip`);
-        } catch (e) {
-          console.error('ZIP generation failed', e);
-          alert('ZIP 생성 실패: ' + (e instanceof Error ? e.message : String(e)));
-        }
+        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+        triggerDownload(URL.createObjectURL(blob), `${project.title}_${preset.exportW}x${preset.exportH}${suffix}.zip`);
       },
     }),
     {

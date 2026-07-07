@@ -124,6 +124,7 @@ export interface EditorState {
   addSlide:              () => void;
   deleteSlide:           (id: number) => void;
   duplicateSlide:        (id: number) => void;
+  reorderSlides:         (fromIndex: number, toIndex: number) => void;
   updateSlideContent:    (id: number, field: keyof SlideContent, value: string) => void;
   updateSlideLayout:     (id: number, updates: Partial<SlideLayout>) => void;
   updateSlideGridPosition: (id: number, position: GridPosition) => void;

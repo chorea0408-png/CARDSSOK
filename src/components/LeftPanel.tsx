@@ -1,16 +1,52 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { useEditorStore } from '../store';
-import { PlusCircle, AlertCircle, Trash2, Copy } from 'lucide-react';
+import { PlusCircle, AlertCircle, Trash2, Copy, GripVertical } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export const LeftPanel: React.FC = () => {
   const {
     slides, selectedSlideId, multiSelectedIds,
     selectSlide, toggleMultiSelect, clearMultiSelect,
-    addSlide, deleteSlide, deleteSelected, duplicateSlide,
+    addSlide, deleteSlide, deleteSelected, duplicateSlide, reorderSlides,
   } = useEditorStore();
 
   const hasMulti = multiSelectedIds.length > 0;
+
+  // ── 드래그 순서 변경 상태 ────────────────────────────────────────────
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const listRef   = useRef<HTMLDivElement>(null);
+  const itemRefs  = useRef<(HTMLDivElement | null)[]>([]);
+
+  const handleDragStart = (e: React.PointerEvent<HTMLDivElement>, index: number) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragIndex(index);
+    setOverIndex(index);
+  };
+
+  const handleDragMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragIndex === null || !listRef.current) return;
+    const y = e.clientY;
+    let nearest = dragIndex;
+    let minDist = Infinity;
+    itemRefs.current.forEach((el, i) => {
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const center = rect.top + rect.height / 2;
+      const dist = Math.abs(y - center);
+      if (dist < minDist) { minDist = dist; nearest = i; }
+    });
+    setOverIndex(nearest);
+  };
+
+  const handleDragEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    if (dragIndex !== null && overIndex !== null && dragIndex !== overIndex) {
+      reorderSlides(dragIndex, overIndex);
+    }
+    setDragIndex(null);
+    setOverIndex(null);
+  };
 
   return (
     <aside className="w-full h-full border-r border-gray-200 bg-gray-50 flex flex-col overflow-y-auto">
@@ -51,18 +87,28 @@ export const LeftPanel: React.FC = () => {
           </div>
         )}
 
-        <div className="space-y-2">
+        <div ref={listRef} className="space-y-2">
           {slides.map((slide, index) => {
             const isSelected   = slide.slide_id === selectedSlideId;
             const isMulti      = multiSelectedIds.includes(slide.slide_id);
             const hasError     = slide.content.headline.replace(/\n/g, '').length > slide.constraints.max_headline_length;
+            const isDragging   = dragIndex === index;
+            const isOver       = overIndex === index && dragIndex !== null && dragIndex !== index;
 
             return (
-              <div key={slide.slide_id} className="relative group/item">
+              <div
+                key={slide.slide_id}
+                ref={el => { itemRefs.current[index] = el; }}
+                className={clsx(
+                  'relative group/item transition-all',
+                  isDragging && 'opacity-40',
+                  isOver && 'ring-2 ring-blue-400 ring-offset-1 rounded-lg',
+                )}
+              >
                 {/* 다중선택 체크박스 */}
                 <div
                   className={clsx(
-                    'absolute left-2 top-1/2 -translate-y-1/2 z-10 w-4 h-4 rounded border-2 flex items-center justify-center transition-all',
+                    'absolute left-7 top-1/2 -translate-y-1/2 z-10 w-4 h-4 rounded border-2 flex items-center justify-center transition-all',
                     isMulti
                       ? 'opacity-100 bg-blue-600 border-blue-600'
                       : 'opacity-0 group-hover/item:opacity-100 bg-white border-gray-400'
@@ -79,6 +125,18 @@ export const LeftPanel: React.FC = () => {
                   )}
                 </div>
 
+                {/* 드래그 핸들 */}
+                <div
+                  className="absolute left-1 top-1/2 -translate-y-1/2 z-10 p-1 cursor-grab active:cursor-grabbing touch-none opacity-0 group-hover/item:opacity-100 transition-opacity"
+                  onPointerDown={(e) => handleDragStart(e, index)}
+                  onPointerMove={handleDragMove}
+                  onPointerUp={handleDragEnd}
+                  onPointerCancel={handleDragEnd}
+                  title="드래그해서 순서 변경"
+                >
+                  <GripVertical size={13} className="text-gray-400" />
+                </div>
+
                 <button
                   onClick={(e) => {
                     if (e.ctrlKey || e.metaKey) {
@@ -88,7 +146,7 @@ export const LeftPanel: React.FC = () => {
                     }
                   }}
                   className={clsx(
-                    'w-full text-left p-3 pl-8 pr-16 rounded-lg border text-sm transition-all',
+                    'w-full text-left p-3 pl-10 pr-16 rounded-lg border text-sm transition-all',
                     isMulti
                       ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-300'
                       : isSelected
@@ -150,7 +208,7 @@ export const LeftPanel: React.FC = () => {
         </button>
 
         <p className="mt-3 text-center text-[10px] text-gray-400">
-          Ctrl+클릭으로 여러 슬라이드 선택
+          ≡ 드래그로 순서 변경 · Ctrl+클릭으로 다중 선택
         </p>
       </div>
     </aside>
