@@ -74,6 +74,17 @@ export const ExportAdModal: React.FC<Props> = ({ exportLabel, onConfirm, onClose
             {exportLabel}
           </button>
         </div>
+
+        <div className="px-4 pb-2.5 -mt-1 text-center">
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[10px] text-gray-300 hover:text-gray-500 transition-colors"
+          >
+            개인정보처리방침
+          </a>
+        </div>
       </div>
     </div>
   );
