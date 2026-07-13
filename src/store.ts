@@ -194,6 +194,7 @@ export const useEditorStore = create<EditorState>()(
           _history: _history.slice(0, -1),
           _future: [slides, ..._future],
           selectedSlideId: stillExists ? selectedSlideId : (restored[0]?.slide_id ?? selectedSlideId),
+          multiSelectedIds: [], // 스냅샷이 통째로 바뀌므로 이전 다중선택은 더 이상 유효하지 않음
           isDirty: true,
         });
       },
@@ -208,6 +209,7 @@ export const useEditorStore = create<EditorState>()(
           _history: [..._history, slides],
           _future: _future.slice(1),
           selectedSlideId: stillExists ? selectedSlideId : (restored[0]?.slide_id ?? selectedSlideId),
+          multiSelectedIds: [],
           isDirty: true,
         });
       },
@@ -246,7 +248,7 @@ export const useEditorStore = create<EditorState>()(
           }
           return slide;
         });
-        set({ slides: newSlides, selectedSlideId: newSlides[0].slide_id, appMode: 'editor', isDirty: true });
+        set({ slides: newSlides, selectedSlideId: newSlides[0].slide_id, multiSelectedIds: [], appMode: 'editor', isDirty: true });
         return themeMatch ? themeMatch.label : null;
       },
 
@@ -264,7 +266,12 @@ export const useEditorStore = create<EditorState>()(
         get()._pushHistory();
         set((state) => {
           const next = state.slides.filter(s => !state.multiSelectedIds.includes(s.slide_id));
-          return { slides: next.length ? next : [createDefaultSlide(Date.now())], multiSelectedIds: [], isDirty: true };
+          const finalSlides = next.length ? next : [createDefaultSlide(Date.now())];
+          // 선택돼 있던 슬라이드가 이번에 삭제됐다면 캔버스가 빈 화면이 되지 않도록 첫 슬라이드로 이동
+          const selectedSlideId = state.multiSelectedIds.includes(state.selectedSlideId)
+            ? finalSlides[0].slide_id
+            : state.selectedSlideId;
+          return { slides: finalSlides, selectedSlideId, multiSelectedIds: [], isDirty: true };
         });
       },
 
@@ -281,7 +288,10 @@ export const useEditorStore = create<EditorState>()(
         get()._pushHistory();
         set((state) => {
           const next = state.slides.filter(s => s.slide_id !== id);
-          return { slides: next.length ? next : state.slides, selectedSlideId: next[0]?.slide_id || id, isDirty: true };
+          if (!next.length) return { slides: state.slides, isDirty: true };
+          // 삭제한 슬라이드가 선택 중이었을 때만 선택을 옮김 — 그 외에는 보던 슬라이드를 유지
+          const selectedSlideId = state.selectedSlideId === id ? next[0].slide_id : state.selectedSlideId;
+          return { slides: next, selectedSlideId, isDirty: true };
         });
       },
 
@@ -401,7 +411,9 @@ export const useEditorStore = create<EditorState>()(
             console.error(`JPG export failed for slide ${i + 1}`, e);
           }
         }
-        set({ selectedSlideId: originalId });
+        // 내보내는 동안 슬라이드가 삭제/재생성됐을 수 있으니 여전히 존재할 때만 원래 선택으로 복귀
+        const stillExists = get().slides.some(s => s.slide_id === originalId);
+        set({ selectedSlideId: stillExists ? originalId : (get().slides[0]?.slide_id ?? originalId) });
       },
 
       exportAllZIP: async () => {
@@ -426,7 +438,9 @@ export const useEditorStore = create<EditorState>()(
             console.error(`ZIP capture failed for slide ${i + 1}`, e);
           }
         }
-        set({ selectedSlideId: originalId });
+        // 내보내는 동안 슬라이드가 삭제/재생성됐을 수 있으니 여전히 존재할 때만 원래 선택으로 복귀
+        const stillExists = get().slides.some(s => s.slide_id === originalId);
+        set({ selectedSlideId: stillExists ? originalId : (get().slides[0]?.slide_id ?? originalId) });
 
         const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
         triggerDownload(URL.createObjectURL(blob), `${project.title}_${preset.exportW}x${preset.exportH}${suffix}.zip`);
