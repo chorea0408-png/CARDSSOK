@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { useEditorStore } from '../store';
 import { FontProfile, GridPosition, Slide, SlideDesign, WatermarkPosition, ThemeType, FontSizes } from '../types';
 import { clsx } from 'clsx';
-import { ImagePlus, X, Sparkles } from 'lucide-react';
+import { ImagePlus, X, Sparkles, TriangleAlert } from 'lucide-react';
 
 const GRID_POSITIONS: GridPosition[] = ['TL', 'TC', 'TR', 'ML', 'MC', 'MR', 'BL', 'BC', 'BR'];
 
@@ -344,6 +344,14 @@ const RightPanelImpl: React.FC = () => {
         )}
 
         <div className="space-y-4 mt-2">
+          {/* ── 이미지 유실 경고 ── */}
+          <div className="flex items-start gap-1.5 px-2.5 py-2 rounded-md bg-amber-50 border border-amber-200">
+            <TriangleAlert size={12} className="text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-[10px] text-amber-700 leading-relaxed">
+              직접 업로드한 배경/로고 이미지는 브라우저에 저장되지 않아요. 새로고침하면 사라지니, 내보내기는 미리 해두세요.
+            </p>
+          </div>
+
           {/* ── 배경 이미지 ── */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">배경 이미지 (직접 업로드)</label>

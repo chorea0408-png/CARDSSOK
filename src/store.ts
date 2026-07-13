@@ -434,8 +434,13 @@ export const useEditorStore = create<EditorState>()(
     }),
     {
       name: 'cardssok-v1',
-      onRehydrateStorage: () => (_state, error) => {
-        if (error) console.error('카드쑉: 저장 데이터 복구 실패', error);
+      onRehydrateStorage: () => (state, error) => {
+        if (error) { console.error('카드쑉: 저장 데이터 복구 실패', error); return; }
+        // selectedSlideId가 복구된 slides에 없으면(예: 예전 데이터, 삭제된 슬라이드 등)
+        // CenterPanel/RightPanel이 빈 화면을 렌더링하게 되므로 첫 슬라이드로 보정
+        if (state && !state.slides.some(s => s.slide_id === state.selectedSlideId)) {
+          state.selectedSlideId = state.slides[0]?.slide_id ?? state.selectedSlideId;
+        }
       },
       storage: {
         getItem: (name) => {
@@ -461,9 +466,11 @@ export const useEditorStore = create<EditorState>()(
       },
       // ✅ as unknown as EditorState: partialize 반환값 타입 캐스팅 (Zustand v5 요구사항)
       partialize: (state) => ({
-        project:       state.project,
-        slideRatio:    state.slideRatio,
-        exportQuality: state.exportQuality,
+        appMode:         state.appMode,
+        project:         state.project,
+        slideRatio:      state.slideRatio,
+        exportQuality:   state.exportQuality,
+        selectedSlideId: state.selectedSlideId,
         slides: state.slides.map(s => ({
           ...s,
           design: { ...s.design, background_image: undefined, logo_image: undefined },
