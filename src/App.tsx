@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from './components/Header';
 import { ManuscriptPanel } from './components/ManuscriptPanel';
 import { LeftPanel } from './components/LeftPanel';
@@ -86,6 +86,7 @@ const ResizeDivider: React.FC<ResizeDividerProps> = ({ onDragDelta }) => {
 const DEFAULT_WIDTHS = { manuscript: 280, left: 240, right: 320 };
 const MIN_WIDTHS     = { manuscript: 160, left: 160, right: 200 };
 const MAX_WIDTHS     = { manuscript: 500, left: 400, right: 500 };
+const MIN_CANVAS_WIDTH = 240; // 캔버스(미리보기)가 최소한 이 정도는 보여야 함
 const PANEL_WIDTHS_KEY = 'cardssok-panel-widths';
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -158,9 +159,9 @@ const EmptyState: React.FC<{ onStart: () => void; onTryExample: () => void }> = 
       {/* 사용법 3단계 */}
       <div className="space-y-3 mb-8 text-left">
         {[
-          { step: '1', title: '원고 입력', desc: '왼쪽 원고 창에 텍스트를 붙여넣거나 직접 입력하세요.' },
+          { step: '1', title: '원고 입력', desc: '원고 입력창에 텍스트를 붙여넣거나 직접 입력하세요.' },
           { step: '2', title: '자동 분리', desc: '엔터 두 번으로 슬라이드가 나뉘어요. 첫 줄은 제목, 나머지는 본문.' },
-          { step: '3', title: '디자인 & 내보내기', desc: '오른쪽에서 색상·폰트를 고르고 PNG/JPG로 저장하세요.' },
+          { step: '3', title: '디자인 & 내보내기', desc: '디자인 화면에서 색상·폰트를 고르고 PNG/JPG로 저장하세요.' },
         ].map(({ step, title, desc }) => (
           <div key={step} className="flex items-start gap-3 bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
             <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
@@ -215,21 +216,46 @@ function App() {
     project, isDirty, undo, redo, deleteSelected, appMode, setAppMode,
     parseAndGenerateSlides, selectedSlideId, duplicateSlide, addSlide,
   } = useEditorStore();
-  const [widths, setWidths] = useState(loadStoredWidths);
+  // targetWidths: 사용자가 드래그로 지정한(=저장되는) "원하는" 폭
+  // widths: 현재 창 폭에 맞게 targetWidths를 눌러 담은 "실제 렌더링" 폭 — 창을 다시
+  // 넓히면 targetWidths 쪽으로 자동 복원된다 (좁혔다가 되돌려도 계속 쪼그라들어 있던 버그 수정)
+  const [targetWidths, setTargetWidths] = useState(loadStoredWidths);
+  const [viewportWidth, setViewportWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);
   // Phase 2: 모바일 기본 탭을 'manuscript'로 변경 (첫 화면이 빈 preview 대신 원고 입력창)
   const [activeTab, setActiveTab] = useState<MobileTab>('manuscript');
   const isMobile = useIsMobile();
 
+  const widths = useMemo(() => {
+    const available = viewportWidth - MIN_CANVAS_WIDTH;
+    const total = targetWidths.manuscript + targetWidths.left + targetWidths.right;
+    if (total <= available) return targetWidths;
+    const scale = Math.max(0, available / total);
+    return {
+      manuscript: Math.max(MIN_WIDTHS.manuscript, Math.round(targetWidths.manuscript * scale)),
+      left:       Math.max(MIN_WIDTHS.left,       Math.round(targetWidths.left * scale)),
+      right:      Math.max(MIN_WIDTHS.right,       Math.round(targetWidths.right * scale)),
+    };
+  }, [targetWidths, viewportWidth]);
+
   const handleDrag = useCallback((panel: keyof typeof DEFAULT_WIDTHS, delta: number) => {
-    setWidths(prev => ({
+    setTargetWidths(prev => ({
       ...prev,
       [panel]: clamp(prev[panel] + delta, MIN_WIDTHS[panel], MAX_WIDTHS[panel]),
     }));
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem(PANEL_WIDTHS_KEY, JSON.stringify(widths)); } catch { /* 저장 실패는 무시 (기본값으로 계속 동작) */ }
-  }, [widths]);
+    try { localStorage.setItem(PANEL_WIDTHS_KEY, JSON.stringify(targetWidths)); } catch { /* 저장 실패는 무시 (기본값으로 계속 동작) */ }
+  }, [targetWidths]);
+
+  // 창 폭이 바뀔 때마다 widths(useMemo)가 다시 계산되도록 뷰포트 폭을 추적
+  useEffect(() => {
+    if (isMobile) return;
+    const handler = () => setViewportWidth(window.innerWidth);
+    handler();
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, [isMobile]);
 
   // ── 키보드 단축키 (Undo/Redo/Delete) ──────────────────────────────
   useEffect(() => {

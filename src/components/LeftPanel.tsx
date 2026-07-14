@@ -105,13 +105,13 @@ const LeftPanelImpl: React.FC = () => {
                   isOver && 'ring-2 ring-blue-400 ring-offset-1 rounded-lg',
                 )}
               >
-                {/* 다중선택 체크박스 */}
+                {/* 다중선택 체크박스 — 모바일은 hover가 없어 항상 노출, 데스크톱은 hover 시에만 */}
                 <div
                   className={clsx(
                     'absolute left-7 top-1/2 -translate-y-1/2 z-10 w-4 h-4 rounded border-2 flex items-center justify-center transition-all',
                     isMulti
                       ? 'opacity-100 bg-blue-600 border-blue-600'
-                      : 'opacity-0 group-hover/item:opacity-100 bg-white border-gray-400'
+                      : 'opacity-100 md:opacity-0 md:group-hover/item:opacity-100 bg-white border-gray-400'
                   )}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -125,9 +125,9 @@ const LeftPanelImpl: React.FC = () => {
                   )}
                 </div>
 
-                {/* 드래그 핸들 */}
+                {/* 드래그 핸들 — 모바일은 hover가 없어 항상 노출, 데스크톱은 hover 시에만 */}
                 <div
-                  className="absolute left-1 top-1/2 -translate-y-1/2 z-10 p-1 cursor-grab active:cursor-grabbing touch-none opacity-0 group-hover/item:opacity-100 transition-opacity"
+                  className="absolute left-1 top-1/2 -translate-y-1/2 z-10 p-1 cursor-grab active:cursor-grabbing touch-none opacity-100 md:opacity-0 md:group-hover/item:opacity-100 transition-opacity"
                   onPointerDown={(e) => handleDragStart(e, index)}
                   onPointerMove={handleDragMove}
                   onPointerUp={handleDragEnd}
@@ -165,9 +165,9 @@ const LeftPanelImpl: React.FC = () => {
                   </p>
                 </button>
 
-                {/* 액션 버튼들 — hover 시 표시 (다중선택 아닐 때) */}
+                {/* 액션 버튼들 — 모바일은 항상 표시, 데스크톱은 hover 시 표시 (다중선택 아닐 때) */}
                 {!isMulti && (
-                  <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                  <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover/item:opacity-100 transition-opacity">
                     {/* 복제 버튼 */}
                     <button
                       onClick={(e) => {
@@ -208,7 +208,8 @@ const LeftPanelImpl: React.FC = () => {
         </button>
 
         <p className="mt-3 text-center text-[10px] text-gray-400">
-          ≡ 드래그로 순서 변경 · Ctrl+클릭으로 다중 선택
+          <span className="md:hidden">≡ 드래그로 순서 변경 · 체크박스로 다중 선택</span>
+          <span className="hidden md:inline">≡ 드래그로 순서 변경 · Ctrl+클릭으로 다중 선택</span>
         </p>
       </div>
     </aside>

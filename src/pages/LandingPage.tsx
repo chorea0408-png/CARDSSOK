@@ -21,7 +21,7 @@ const STEPS: { step: string; title: string; desc: string }[] = [
 
 export const LandingPage: React.FC<{ onStart: () => void; onPrivacyClick: () => void }> = ({ onStart, onPrivacyClick }) => {
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="min-h-screen bg-white text-gray-900 overflow-x-hidden">
       {/* 헤더 */}
       <header className="h-16 border-b border-gray-100 px-4 md:px-8 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur z-10">
         <div className="flex items-center gap-2">
